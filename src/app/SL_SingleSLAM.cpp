@@ -311,7 +311,7 @@ int SingleSLAM::initTracker(int f, vector<FeaturePoint*>& existFeatPoints) {
 }
 
 int SingleSLAM::sendInitFeaturePoints(){
-	coslam_gs::features initFeats;
+	coslam_feature_tracker::features initFeats;
 	ros::Time ts(_ts);
 	initFeats.header.stamp = ts;
 
@@ -628,7 +628,7 @@ int SingleSLAM::fastPoseUpdate3D() {
 			nodes[i]->pt->mpt->setUncertain();
 		}
 	}
-	CamPoseItem* camPos = m_camPos.add(currentFrame(), camId, R, t);
+	CamPoseItem* camPos = m_camPos.add(currentFrame(), _ts, camId, R, t);
 	updateCamParamForFeatPts(K, camPos);
 
 	return num;
@@ -721,7 +721,7 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 	}
 
 	printf("poseUpdate3D: currentFrame(): %d\n", currentFrame());
-	CamPoseItem* camPos = m_camPos.add(currentFrame(), camId, R, t);
+	CamPoseItem* camPos = m_camPos.add(currentFrame(), _ts, camId, R, t);
 	updateCamParamForFeatPts(K.data, camPos);
 
 #ifdef DEBUG_MODE

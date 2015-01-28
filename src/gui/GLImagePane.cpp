@@ -153,6 +153,9 @@ void GLImagePane::keyPressed(wxKeyEvent& event) {
 	else if (event.GetKeyCode() == 'P') {
 		MyApp::bStartInit = true;
 	}
+	else if (event.GetKeyCode() == 'O') {
+		MyApp::bStartMove = true;
+	}
 	else{
 		MyApp::bStop = !MyApp::bStop;
 	}

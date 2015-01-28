@@ -12,6 +12,7 @@
 #include "tools/SL_Timing.h"
 
 #include "gui/MyApp.h"
+#include "slam/SL_SLAMHelper.h"
 
 bool ROSMain_features() {
 	CoSLAM& coSLAM = MyApp::coSLAM;
@@ -81,6 +82,8 @@ bool ROSMain_features() {
 //		toc();
 		cout <<"debug\n";
 
+//		redis->setPose(1, 2, 3.6);
+
 		while (!MyApp::bExit){
 			pthread_mutex_lock(&MyApp::_mutexImg);
 			if (!coSLAM.grabReadFrame())
@@ -96,6 +99,9 @@ bool ROSMain_features() {
 				coSLAM.curFrame = 0;
 				//initialise the map points
 				if (coSLAM.initMap()){
+
+					coSLAM.calibGlobal2Cam();
+
 					for (int i = 0; i < coSLAM.numCams; i++)
 						coSLAM.state[i] = SLAM_STATE_NORMAL;
 					printf("Init map success!\n");
@@ -114,6 +120,13 @@ bool ROSMain_features() {
 			printf("slam[%d].m_camPos.size(): %d\n", i, coSLAM.slam[i].m_camPos.size());
 			coSLAM.state[i] = SLAM_STATE_NORMAL;
 		}
+
+		MyApp::redis[0] = new CBRedisClient("odroid01", "192.168.1.137", 6379);
+		MyApp::redis[1] = new CBRedisClient("odroid03", "192.168.1.137", 6379);
+		MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
+
+
+//		return 0;
 //		coSLAM.pause();
 
 		int endFrame = Param::nTotalFrame - Param::nSkipFrame
@@ -131,6 +144,10 @@ bool ROSMain_features() {
 
 		vector<double> tmStepVec;
 
+
+		vector<double> poseSent[SLAM_MAX_NUM];
+		vector<double> rosTime;
+
 		while (!MyApp::bExit) {
 //			while (MyApp::bStop) {/*stop*/
 //			}
@@ -144,6 +161,27 @@ bool ROSMain_features() {
 			coSLAM.virtualReadFrame();
 
 			coSLAM.poseUpdate(bEstPose);
+			//Use redis to send over the poses
+			rosTime.push_back(ros::Time::now().toSec());
+
+			for (int i = 0; i < coSLAM.numCams; i++){
+				double org[3];
+//				getCamCenter(coSLAM.slam[i].m_camPos.current(), org);
+				coSLAM.transformCamPose2Global(coSLAM.slam[i].m_camPos.current(), org);
+
+				MyApp::redis[i]->setPose(org[0], org[1], org[2]);
+
+				double ts = coSLAM.slam[i].m_camPos.current()->ts;
+				poseSent[i].push_back(ts);
+				poseSent[i].push_back(org[0]);
+				poseSent[i].push_back(org[1]);
+				poseSent[i].push_back(org[2]);
+				rosTime.push_back(ts);
+			}
+			if (MyApp::bStartMove){
+				MyApp::redis_start->setCommand("go");
+				MyApp::bStartMove = false;
+			}
 
 			//coSLAM.pause();
 			coSLAM.cameraGrouping();
@@ -167,7 +205,7 @@ bool ROSMain_features() {
 
 			coSLAM.m_tmPerStep = tmPerStep.toc();
 			tmStepVec.push_back(coSLAM.m_tmPerStep);
-			Sleep(50);
+//			Sleep(50);
 
 			if (i % 500 == 0) {
 				//coSLAM.releaseFeatPts(coSLAM.curFrame - 500);
@@ -177,13 +215,40 @@ bool ROSMain_features() {
 
 			MyApp::triggerClients();
 		}
+
+		for (int i = 0; i < coSLAM.numCams; i++){
+			delete MyApp::redis[i];
+		}
+		delete MyApp::redis_start;
+
 		cout << " the result is saved at " << MyApp::timeStr << endl;
 		coSLAM.exportResults(MyApp::timeStr);
 
-		FILE* fid = fopen("slam_timing.txt","w");
-		for (int i = 0; i < tmStepVec.size(); i++)
-			fprintf(fid, "%f\n", tmStepVec[i]);
-		fclose(fid);
+//		FILE* fid = fopen("slam_timing.txt","w");
+//		for (int i = 0; i < tmStepVec.size(); i++)
+//			fprintf(fid, "%f\n", tmStepVec[i]);
+//		fclose(fid);
+//
+//		fid = fopen("poseSent0.txt","w");
+//		for (int i = 0; i < poseSent[0].size(); i = i + 4)
+//			fprintf(fid, "%lf %lf %lf %lf\n", poseSent[0][i],
+//					poseSent[0][i+1], poseSent[0][i+2], poseSent[0][i+3]);
+//		fclose(fid);
+//
+//		fid = fopen("poseSent1.txt","w");
+//		for (int i = 0; i < poseSent[1].size(); i = i + 4)
+//			fprintf(fid, "%lf %lf %lf %lf\n", poseSent[1][i],
+//					poseSent[1][i+1], poseSent[1][i+2], poseSent[1][i+3]);
+//		fclose(fid);
+//
+//		fid = fopen("rosTime.txt","w");
+//		for (int i = 0; i < rosTime.size(); i = i + coSLAM.numCams + 1){
+//			for (int j = 0; j <= coSLAM.numCams; j++){
+//				fprintf(fid, "%lf ", rosTime[i+j]);
+//			}
+//			fprintf(fid, "\n");
+//		}
+//		fclose(fid);
 
 		logInfo("slam finished\n");
 	} catch (SL_Exception& e) {

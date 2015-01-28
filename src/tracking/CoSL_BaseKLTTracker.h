@@ -11,7 +11,6 @@
 #define KLT_NEWLY_DETECTED 1
 #define KLT_TRACKED 0
 #define KLT_INVALID -1
-#define KLT_MAX_FEATURE_NUM 3000
 
 class BaseKLTTracker{
 public:

@@ -66,7 +66,7 @@ void InitMap::detectSiftFeats(std::vector<cv::KeyPoint>& keypoints, cv::Mat& des
 	  		ptsNorm[2 * i + 1] = out[1];
 	  }
 
-	  printf("Number of detected sift points in camera %d:%d \n", iCam, num);
+	  printf("Number of detected sift points in camera %d: %d \n", iCam, num);
 }
 
 void InitMap::detectSurfFeats(int iCam) {
@@ -159,6 +159,43 @@ void InitMap::detectCorners(int iCam) {
 	m_cornerFlag[iCam].resize(num, 1);
 	m_cornerFlag[iCam].fill(-1);
 }
+
+
+void InitMap::detectCorners_CPU(int iCam) {
+	const ImgG* img = m_pImgGray[iCam];
+	//	KLT corner detector
+	int IW = img->w;
+	int IH = img->h;
+	CVKLTTracker klt;
+	klt.open(IW,IH);
+	klt.detect(*img);
+
+	//compute the normalized points
+	Mat_d& pts = m_corners[iCam];
+	Mat_d& ptsNorm = m_normCorners[iCam];
+	int num = klt.points[0].size();
+	printf("detectCorners iCam %d keyPts.size(): %d\n", iCam, num);
+
+	pts.resize(num, 2);
+	ptsNorm.resize(num, 2);
+	vector<cv::Point2f>& corners = klt.points[0];
+
+	for (int i = 0; i < num; i++) {
+		pts.data[2 * i] = corners[i].x;
+		pts.data[2 * i + 1] = corners[i].y;
+		double in[2], out[2];
+		in[0] = pts.data[2 * i];
+		in[1] = pts.data[2 * i + 1];
+		// remove the distortion
+		undistorPointNew(K[iCam],kd[iCam],in,out);
+  		ptsNorm[2 * i] = out[0];
+  		ptsNorm[2 * i + 1] = out[1];
+	}
+
+	m_cornerFlag[iCam].resize(num, 1);
+	m_cornerFlag[iCam].fill(-1);
+}
+
 #include "calibration/SL_CalibTwoCam.h"
 int InitMap::estimateFmat(const Mat_d& pts1, const Mat_d& pts2, Mat_d& F,
 		Mat_uc& inlierFlag) {
@@ -267,6 +304,14 @@ bool InitMap::apply_new(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 	//detect surf features at all cameras
 	for (int i = 0; i < numCams; i++){
 		detectSiftFeats(keypoints[i], desc[i], i);
+
+//		char filename[100];
+//				sprintf(filename, "sift_%d.txt", i);
+//				FILE* file = fopen(filename, "w");
+//		for (int j = 0; j < keypoints[i].size(); j++){
+//			fprintf(file, "%lf %lf %f\n", keypoints[i][j].pt.x, keypoints[i][j].pt.y, keypoints[i][j].response);
+//		}
+//		fclose(file);
 	}
 	for (int i = 0; i < numCams; i++) {
 		for (int j = i + 1; j < numCams; j++) {
@@ -294,6 +339,64 @@ bool InitMap::apply_new(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 
 	double numMapPts = (nSurfPts - numOutliers) * 1.0;
 	double ratioInitMappedPts = numMapPts / (m_numSurfTracks);
+	printf("ratioInitMappedPts: %f\n", ratioInitMappedPts);
+	if ( ratioInitMappedPts < Param::minRatioInitMapPts ||
+			numMapPts < 10)
+		return false;
+	return true;
+}
+
+
+bool InitMap::apply_new_corner(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
+		MapPointList& mapPts) {
+	if (numCams < 2){
+		printf("StereoMatch - at least two cameras are required!\n");
+		return false;
+	}
+
+	keypoints.resize(numCams);
+	desc.resize(numCams);
+
+	//detect surf features at all cameras
+	for (int i = 0; i < numCams; i++){
+		detectSiftFeats(keypoints[i], desc[i], i);
+		detectCorners_CPU(i);
+	}
+	for (int i = 0; i < numCams; i++) {
+		for (int j = i + 1; j < numCams; j++) {
+			matchSiftBetween_usingF(i, j);
+			matchCornerNCCBetween(i, j, 0.6, 7.0, 60);
+		}
+	}
+	//select camera orders
+	selectImageOrder();
+	getSiftTracks();
+	getCornerTracks();
+
+	//compute extrinsic parameters for all cameras
+	if(!computeExtrinsic_5pts()){
+		return false;
+	}
+	//reconstruct the initial map points
+	int nSurfPts = reconstructTracks(m_surfTracks, m_numSurfTracks, 2, frame0,
+			pFeaturePts, mapPts, 5.0);
+
+	logInfo("number of SURF feature points reconstructed : %d\n", nSurfPts);
+
+	int nCorners = 0;
+	if (nSurfPts < KLT_MAX_FEATURE_NUM) {
+		nCorners = reconstructTracks(m_cornerTracks, m_numCornerTracks, 2,
+				frame0, pFeaturePts, mapPts, 5.0);
+		logInfo("number of corners reconstructed : %d\n", nCorners);
+	}
+
+	int numOutliers = removeOutliers(mapPts, 3.0);
+	logInfo("removed outliers:%d\n", numOutliers);
+	if(numOutliers < 0)
+		return false;
+
+	double numMapPts = (nSurfPts + nCorners - numOutliers) * 1.0;
+	double ratioInitMappedPts = numMapPts / (m_numSurfTracks + m_numCornerTracks);
 	printf("ratioInitMappedPts: %f\n", ratioInitMappedPts);
 	if ( ratioInitMappedPts < Param::minRatioInitMapPts ||
 			numMapPts < 10)
@@ -434,7 +537,7 @@ void InitMap::matchCornerNCCBetween(int iCam, int jCam, double minNcc,
 
 	//get seed points
 	Mat_d seedPts1, seedPts2;
-	getMatchedPts(m_surfMatches[iCam][jCam], m_surfPts[iCam], m_surfPts[jCam],
+	getMatchedPts(m_surfMatches[iCam][jCam], m_siftPts[iCam], m_siftPts[jCam],
 			seedPts1, seedPts2);
 
 	//get the disparity matrix
@@ -456,10 +559,17 @@ void InitMap::matchCornerNCCBetween(int iCam, int jCam, double minNcc,
 #endif
 }
 
-int InitMap::matchSiftBetween(int iCam, int jCam){
+int InitMap::matchSiftBetween_usingF(int iCam, int jCam){
 	cv::FlannBasedMatcher matcher;
 	vector< vector< cv::DMatch >  > matches;
 	matcher.knnMatch( desc[iCam], desc[jCam], matches, 2);
+
+	FILE* file0 = fopen("knn_match_1.txt", "w");
+	for( int i = 0; i < desc[iCam].rows; i++ ){
+		fprintf(file0, "%f %d %d\n",
+				matches[i][0].distance, matches[i][0].queryIdx,matches[i][0].trainIdx);
+	}
+	fclose(file0);
 
 	double max_dist = 0; double min_dist = 100;
 	double nndrRatio = 0.7;
@@ -491,7 +601,113 @@ int InitMap::matchSiftBetween(int iCam, int jCam){
 	  std::vector< cv::DMatch > good_matches;
 
 	  for( int i = 0; i < desc[iCam].rows; i++ )
-	  { if( matches[i][0].distance <= max_dist / 2 && flag_ratio_test[i])
+	  { if( matches[i][0].distance <= max_dist * 1.0 && flag_ratio_test[i])
+	    { good_matches.push_back( matches[i][0]); }
+	  }
+
+	  //-- Draw only "good" matches
+//	  Mat img_matches;
+//	  drawMatches( frames[iCam], keypoints[iCam], frames[jCam], keypoints[jCam],
+//	               good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
+//	               vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+//
+//	  //-- Show detected matches
+//	  imshow( "Good Matches", img_matches );
+//
+//	  for( int i = 0; i < (int)good_matches.size(); i++ )
+//	  { printf( "-- Good Match [%d] dist:%f, Keypoint 1: %d  -- Keypoint 2: %d  \n", i, good_matches[i].distance, good_matches[i].queryIdx, good_matches[i].trainIdx ); }
+//
+//	  waitKey(0);
+
+	  Matching siftMatches;
+	  siftMatches.clear();
+	  siftMatches.reserve(good_matches.size());
+
+//		char filename[100];
+//		sprintf(filename, "matches_1.txt");
+//		FILE* file = fopen(filename, "w");
+	  //		for (int j = 0; j < keypoints[i].size(); j++){
+	  //			fprintf(file, "%lf %lf %f\n", keypoints[i][j].pt.x, keypoints[i][j].pt.y, keypoints[i][j].response);
+	  //		}
+	  //		fclose(file);
+	  	for (int i = 0; i < good_matches.size(); i++) {
+	  		siftMatches.add(good_matches[i].queryIdx,
+	  					good_matches[i].trainIdx, good_matches[i].distance);
+//			fprintf(file, "%d %d %f\n", good_matches[i].queryIdx,
+//  					good_matches[i].trainIdx, good_matches[i].distance);
+	  }
+//	  fclose(file);
+//	  printf("SIFT inlier matches(%d-%d): %d\n", iCam, jCam,  m_surfMatches[iCam][jCam].num);
+
+	  Mat_d pts1, pts2;
+	  getMatchedPts(siftMatches, m_siftPts[iCam], m_siftPts[jCam], pts1, pts2);
+	  Mat_d matF;
+	  Mat_uc inlierFlag;
+	  if (estimateFmat(pts1, pts2, matF, inlierFlag) < 0) {
+		  logInfo("no F matrix can be estimated between (%d -%d)\n", iCam, jCam);
+		  return false;
+	  }
+	  F[iCam][jCam].cloneFrom(matF);
+
+		//---------------------keep inlier matches -----------------------------------//
+		int numMatch = siftMatches.num;
+		assert(numMatch == inlierFlag.m);
+		m_surfMatches[iCam][jCam].clear();
+		m_surfMatches[iCam][jCam].reserve(numMatch);
+		for (int i = 0; i < numMatch; i++) {
+			if (inlierFlag.data[i] > 0) {
+				m_surfMatches[iCam][jCam].add(siftMatches[i].idx1,
+						siftMatches[i].idx2, siftMatches[i].dist);
+			}
+		}
+		printf("SURF inlier matches(%d-%d): %d\n", iCam, jCam, m_surfMatches[iCam][jCam].num);
+
+	  return 0;
+}
+
+int InitMap::matchSiftBetween(int iCam, int jCam){
+	cv::FlannBasedMatcher matcher;
+	vector< vector< cv::DMatch >  > matches;
+	matcher.knnMatch( desc[iCam], desc[jCam], matches, 2);
+
+	FILE* file0 = fopen("knn_match_1.txt", "w");
+	for( int i = 0; i < desc[iCam].rows; i++ ){
+		fprintf(file0, "%f %d %d\n",
+				matches[i][0].distance, matches[i][0].queryIdx,matches[i][0].trainIdx);
+	}
+	fclose(file0);
+
+	double max_dist = 0; double min_dist = 100;
+	double nndrRatio = 0.7;
+
+	vector<bool> flag_ratio_test(matches.size(), false);
+
+	  //-- Quick calculation of max and min distances between keypoints
+	  for( int i = 0; i < desc[iCam].rows; i++ )
+	  { double dist = matches[i][0].distance;
+	    if( dist < min_dist ) min_dist = dist;
+	    if( dist > max_dist ) max_dist = dist;
+
+	    if (matches[i].size() <2)
+	    	continue;
+
+		const cv::DMatch &m1 = matches[i][0];
+		const cv::DMatch &m2 = matches[i][1];
+	    if(m1.distance <= nndrRatio * m2.distance)
+	    	flag_ratio_test[i] = true;
+	  }
+
+	  printf("-- Max dist : %f \n", max_dist );
+	  printf("-- Min dist : %f \n", min_dist );
+
+	  //-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist,
+	  //-- or a small arbitary value ( 0.02 ) in the event that min_dist is very
+	  //-- small)
+	  //-- PS.- radiusMatch can also be used here.
+	  std::vector< cv::DMatch > good_matches;
+
+	  for( int i = 0; i < desc[iCam].rows; i++ )
+	  { if( matches[i][0].distance <= max_dist * 1.0 && flag_ratio_test[i])
 	    { good_matches.push_back( matches[i][0]); }
 	  }
 
@@ -511,13 +727,22 @@ int InitMap::matchSiftBetween(int iCam, int jCam){
 
 	  m_surfMatches[iCam][jCam].clear();
 	  m_surfMatches[iCam][jCam].reserve(good_matches.size());
+
+		char filename[100];
+		sprintf(filename, "matches_1.txt");
+		FILE* file = fopen(filename, "w");
+	  //		for (int j = 0; j < keypoints[i].size(); j++){
+	  //			fprintf(file, "%lf %lf %f\n", keypoints[i][j].pt.x, keypoints[i][j].pt.y, keypoints[i][j].response);
+	  //		}
+	  //		fclose(file);
 	  	for (int i = 0; i < good_matches.size(); i++) {
 	  		m_surfMatches[iCam][jCam].add(good_matches[i].queryIdx,
 	  					good_matches[i].trainIdx, good_matches[i].distance);
+			fprintf(file, "%d %d %f\n", good_matches[i].queryIdx,
+  					good_matches[i].trainIdx, good_matches[i].distance);
 	  }
+	  fclose(file);
 	  printf("SIFT inlier matches(%d-%d): %d\n", iCam, jCam,  m_surfMatches[iCam][jCam].num);
-
-	  return 0;
 }
 
 void InitMap::selectImageOrder() {

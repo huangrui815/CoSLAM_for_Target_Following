@@ -46,6 +46,8 @@ int MyApp::runMode = RUN_MODE_OFFLINE;
 bool MyApp::bStop = false;
 bool MyApp::bExit = false;
 bool MyApp::bStartInit = false;
+bool MyApp::bStartMove = false;
+
 bool MyApp::bSingleStep = false;
 char MyApp::timeStr[256];
 
@@ -58,7 +60,9 @@ vector<vector<float> > MyApp::s_reprojErrStatic;
 vector<vector<float> > MyApp::s_reprojErrDynamic;
 vector<vector<int> > MyApp::s_frameNumber;
 
-list<coslam_gs::features> MyApp::featuresList[SLAM_MAX_NUM];
+list<coslam_feature_tracker::features> MyApp::featuresList[SLAM_MAX_NUM];
+list<ar_track_alvar_msgs::AlvarMarkers> MyApp::markerList[SLAM_MAX_NUM];
+
 ros::Publisher MyApp::pub_features[SLAM_MAX_NUM];
 pthread_mutex_t MyApp::_mutexImg;
 pthread_cond_t MyApp::_condImg;
@@ -68,6 +72,14 @@ pthread_cond_t MyApp::_condFeatures;
 CoSLAMThread* MyApp::coSlamThread;
 
 pthread_t MyApp::_nodeThread;
+
+CBRedisClient* MyApp::redis[SLAM_MAX_NUM];
+CBRedisClient* MyApp::redis_start;
+
+//PosVelKF MyApp::posVelKF[SLAM_MAX_NUM][3];
+
+cv::Point3f MyApp::markerPoseGlobal[MAX_NUM_MARKERS];
+int MyApp::_numMarkers = 4;
 
 DEFINE_EVENT_TYPE(CloseApp);
 BEGIN_EVENT_TABLE(MyApp, wxApp)
@@ -216,12 +228,12 @@ bool MyApp::initOffline() {
 //	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/camfeeds/v2_selected.avi");
 //	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/camfeeds/v3_selected.avi");
 
-	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
-	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
+//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
+//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
 //	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_6.avi");
 //
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video0.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video1.avi");
+	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video0.avi");
+	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video1.avi");
 
 
 //	Param::camFilePath.push_back(
@@ -248,13 +260,13 @@ bool MyApp::initOffline() {
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
 
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
 
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/odroid.txt");
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/odroid.txt");
+	Param::camFilePath.push_back(
+			"/home/rui/workspace/calibrations/odroid.txt");
+	Param::camFilePath.push_back(
+			"/home/rui/workspace/calibrations/odroid.txt");
 
 	vector<int> startFrame;
 //	startFrame.push_back(150);
@@ -263,8 +275,8 @@ bool MyApp::initOffline() {
 
 //	startFrame.push_back(640);
 //	startFrame.push_back(640);
-	startFrame.push_back(0);
-	startFrame.push_back(0);
+	startFrame.push_back(250);
+	startFrame.push_back(250);
 
 
 	Param::nInitFrame = 0;
@@ -531,6 +543,8 @@ bool MyApp::initROS_features() {
 			"/home/rui/workspace/calibrations/odroid.txt");
 	Param::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
+//	Param::camFilePath.push_back(
+//			"/home/rui/workspace/calibrations/odroid.txt");
 
 //		Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
 //		Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
@@ -539,6 +553,7 @@ bool MyApp::initROS_features() {
 //		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
 		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video0.avi");
 		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
+//		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
 
 		_camNum = Param::camFilePath.size();
 
@@ -559,6 +574,8 @@ bool MyApp::initROS_features() {
 	// Initialize the ROS node
 	videoNodeInit();
 	featureNodeInit();
+	arMarkerNodeInit();
+
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -696,7 +713,7 @@ void MyApp::subCB_two_videos(const sensor_msgs::ImageConstPtr &img1,  const sens
 	//pthread_mutex_unlock(&_mutexImg);
 	pthread_cond_signal(&MyApp::_condImg);
 
-	ROS_INFO("img1: %f, img2: %f\n", img1->header.stamp.toSec(), img2->header.stamp.toSec());
+//	ROS_INFO("img1: %f, img2: %f\n", img1->header.stamp.toSec(), img2->header.stamp.toSec());
 
 //	ROS_INFO("tm1(%d x %d): %lf  tm2(%d x %d): %lf\n",
 //			cv_ptr1->image.cols, cv_ptr1->image.rows,
@@ -717,9 +734,85 @@ void MyApp::subCB_two_videos(const sensor_msgs::ImageConstPtr &img1,  const sens
 //	}
 }
 
-void MyApp::subCB_two_features(const coslam_gs::featuresConstPtr &features0,  const coslam_gs::featuresConstPtr &features1){
-	coslam_gs::features fts0 = *features0;
-	coslam_gs::features fts1 = *features1;
+
+void MyApp::subCB_3_videos(const sensor_msgs::ImageConstPtr &img1,
+		const sensor_msgs::ImageConstPtr &img2,
+		const sensor_msgs::ImageConstPtr &img3){
+//	int sec = img1->header.stamp.sec;
+//	int nsec = img1->header.stamp.nsec;
+
+//	ROS_INFO("Getting image at time stamp %d sec and %d nsec\n",
+//			sec, nsec);
+//
+//	tm1.push_back((double)(sec + nsec * 10e-9));
+//
+//	sec = img2->header.stamp.sec;
+//	nsec = img2->header.stamp.nsec;
+////	ROS_INFO("Getting image at time stamp %d sec and %d nsec\n",
+////			sec, nsec);
+
+	cv_bridge::CvImagePtr cv_ptr[3];
+	try{
+		cv_ptr[0] = cv_bridge::toCvCopy(img1, sensor_msgs::image_encodings::MONO8);
+		cv_ptr[1] = cv_bridge::toCvCopy(img2, sensor_msgs::image_encodings::MONO8);
+		cv_ptr[2] = cv_bridge::toCvCopy(img3, sensor_msgs::image_encodings::MONO8);
+	}
+	catch (cv_bridge::Exception& e)
+	{
+		ROS_ERROR("cv_bridge exception: %s", e.what());
+		return;
+	}
+
+	//pthread_mutex_lock(&_mutexImg);
+	if (MyApp::rosReader[0]._imgs.size() > 10)
+	{
+		for (int i = 0; i < 3; i++){
+		MyApp::rosReader[i]._imgs.pop_front();
+		//MyApp::rosReader[1]._imgs.pop_front();
+		MyApp::rosReader[i]._ts.pop_front();
+		//MyApp::rosReader[1]._ts.pop_front();
+		MyApp::rosReader[i]._seqs.pop_front();
+		//MyApp::rosReader[1]._seqs.pop_front();
+		}
+	}
+
+	MyApp::rosReader[0]._imgs.push_back(cv_ptr[0]->image);
+	MyApp::rosReader[1]._imgs.push_back(cv_ptr[1]->image);
+	MyApp::rosReader[2]._imgs.push_back(cv_ptr[2]->image);
+	MyApp::rosReader[0]._ts.push_back(img1->header.stamp.toSec());
+	MyApp::rosReader[1]._ts.push_back(img2->header.stamp.toSec());
+	MyApp::rosReader[2]._ts.push_back(img3->header.stamp.toSec());
+	MyApp::rosReader[0]._seqs.push_back(img1->header.seq);
+	MyApp::rosReader[1]._seqs.push_back(img2->header.seq);
+	MyApp::rosReader[2]._seqs.push_back(img3->header.seq);
+	//pthread_mutex_unlock(&_mutexImg);
+	pthread_cond_signal(&MyApp::_condImg);
+
+//	ROS_INFO("img1: %f, img2: %f\n", img1->header.stamp.toSec(), img2->header.stamp.toSec());
+
+//	ROS_INFO("tm1(%d x %d): %lf  tm2(%d x %d): %lf\n",
+//			cv_ptr1->image.cols, cv_ptr1->image.rows,
+//			cv_ptr2->image.cols, cv_ptr2->image.rows,
+//			tm1.back(), tm2.back());
+
+//	cv::imshow("view1", cv_ptr1->image);
+//	cv::imshow("view2", cv_ptr2->image);
+//	cv::waitKey(3);
+//
+//	if (!opened){
+//		vw.open("/media/rui/Data/Chatterbox_Data/ros_data/video_write_out.avi", CV_FOURCC('D', 'I', 'V', 'X'), 30,
+//				cv::Size(cv_ptr->image.cols, cv_ptr->image.rows), 1);
+//		opened = true;
+//	}
+//	if (vw.isOpened()){
+//		vw<<cv_ptr->image;
+//	}
+}
+
+void MyApp::subCB_two_features(const coslam_feature_tracker::featuresConstPtr &features0,
+		const coslam_feature_tracker::featuresConstPtr &features1){
+	coslam_feature_tracker::features fts0 = *features0;
+	coslam_feature_tracker::features fts1 = *features1;
 
 	cout << "subCB_two_features\n";
 
@@ -736,33 +829,115 @@ void MyApp::subCB_two_features(const coslam_gs::featuresConstPtr &features0,  co
 	ROS_INFO("features0: %f, features1: %f\n", features0->header.stamp.toSec(), features1->header.stamp.toSec());
 }
 
+void MyApp::subCB_3_features(const coslam_feature_tracker::featuresConstPtr &features0,
+		const coslam_feature_tracker::featuresConstPtr &features1,
+		const coslam_feature_tracker::featuresConstPtr &features2){
+	coslam_feature_tracker::features fts0 = *features0;
+	coslam_feature_tracker::features fts1 = *features1;
+	coslam_feature_tracker::features fts2 = *features2;
+
+	cout << "subCB_3_features\n";
+
+//	if (MyApp::featuresList[0].size() > 10){
+//		MyApp::featuresList[0].pop_front();
+//		MyApp::featuresList[1].pop_front();
+//	}
+	pthread_mutex_lock(&MyApp::_mutexFeatures);
+	MyApp::featuresList[0].push_back(fts0);
+	MyApp::featuresList[1].push_back(fts1);
+	MyApp::featuresList[2].push_back(fts2);
+	pthread_cond_signal(&MyApp::_condFeatures);
+	pthread_mutex_unlock(&MyApp::_mutexFeatures);
+
+	ROS_INFO("features0: %f, features1: %f\n", features0->header.stamp.toSec(), features1->header.stamp.toSec());
+}
+
 void MyApp::videoNodeInit(){
 	_it = new image_transport::ImageTransport(_nh);
 //	sub_video[0].subscribe(*_it, "/gonk_usb_cam/image_raw", 100);
 //	sub_video[1].subscribe(*_it, "/kitt_usb_cam/image_raw", 100);
 
 	sub_video[0].subscribe(*_it, "/coslam_feature_tracker1/image_raw", 10);
-	sub_video[1].subscribe(*_it, "/coslam_feature_tracker2/image_raw", 10);
+	sub_video[1].subscribe(*_it, "/coslam_feature_tracker3/image_raw", 10);
+//	sub_video[2].subscribe(*_it, "/coslam_feature_tracker3/image_raw", 10);
 
+
+//	videoSync = new message_filters::Synchronizer< videoSyncPolicy >(videoSyncPolicy(10), sub_video[0], sub_video[1], sub_video[2]);
+//	videoSync->registerCallback(boost::bind(&MyApp::subCB_3_videos, this, _1, _2, _3));
 
 	videoSync = new message_filters::Synchronizer< videoSyncPolicy >(videoSyncPolicy(10), sub_video[0], sub_video[1]);
 	videoSync->registerCallback(boost::bind(&MyApp::subCB_two_videos, this, _1, _2));
 }
 
 void MyApp::featureNodeInit(){
-	pub_mapInit = _nh.advertise<std_msgs::Byte>("/mapInit", 1);
+	pub_mapInit = _nh.advertise<std_msgs::Byte>("/mapInit", 10);
 	pub_triggerClients = _nh.advertise<std_msgs::Byte>("/trigger",1);
 
 //	for (int i = 0; i <_camNum; i++){
-		pub_features[0] = _nh.advertise<coslam_gs::features>("/coslam_feature_tracker1/init_features",10);
-		pub_features[1] = _nh.advertise<coslam_gs::features>("/coslam_feature_tracker2/init_features",10);
+		pub_features[0] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker1/init_features",10);
+		pub_features[1] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker3/init_features",10);
+//		pub_features[2] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker3/init_features",10);
 
 		sub_features[0].subscribe(_nh, "/coslam_feature_tracker1/features", 10);
-		sub_features[1].subscribe(_nh, "/coslam_feature_tracker2/features", 10);
+		sub_features[1].subscribe(_nh, "/coslam_feature_tracker3/features", 10);
+//		sub_features[2].subscribe(_nh, "/coslam_feature_tracker3/features", 10);
 //	}
 
-	featuresSync = new message_filters::Synchronizer< featuresSyncPolicy >(featuresSyncPolicy(10), sub_features[0], sub_features[1]);
-	featuresSync->registerCallback(boost::bind(&MyApp::subCB_two_features, this, _1, _2));
+//	featuresSync = new message_filters::Synchronizer< featuresSyncPolicy >(featuresSyncPolicy(10),
+//			sub_features[0], sub_features[1], sub_features[2]);
+//	featuresSync->registerCallback(boost::bind(&MyApp::subCB_3_features, this, _1, _2, _3));
+		featuresSync = new message_filters::Synchronizer< featuresSyncPolicy >(featuresSyncPolicy(10),
+				sub_features[0], sub_features[1]);
+		featuresSync->registerCallback(boost::bind(&MyApp::subCB_two_features, this, _1, _2));
+}
+
+void MyApp::subCB_2_marker_pose(const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers0,
+			const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers1){
+
+	ROS_INFO("Received markers sizes: %d %d\n", markers0->markers.size(),
+					markers1->markers.size());
+
+	if (markers0->markers.size() == _numMarkers
+			&& markers1->markers.size() == _numMarkers)
+	{
+		MyApp::markerList[0].push_back(*markers0);
+		MyApp::markerList[1].push_back(*markers1);
+		ROS_INFO("Received markers: %lf %lf\n", markers0->header.stamp.toSec(),
+				markers1->header.stamp.toSec());
+	}
+}
+
+void MyApp::arMarkerNodeInit(){
+	sub_ar_marker_pose[0].subscribe(_nh, "/cbodroid01/ar_pose_marker", 1);
+	sub_ar_marker_pose[1].subscribe(_nh, "/cbodroid03/ar_pose_marker", 1);
+	markerPoseSync = new message_filters::Synchronizer< markerPoseSyncPolicy >(markerPoseSyncPolicy(10),
+			sub_ar_marker_pose[0], sub_ar_marker_pose[1]);
+	markerPoseSync->registerCallback(boost::bind(&MyApp::subCB_2_marker_pose, this, _1, _2));
+
+//	MyApp::markerPoseGlobal[1].x = 0.14; MyApp::markerPoseGlobal[1].y = 0; MyApp::markerPoseGlobal[1].z = 1;
+//	MyApp::markerPoseGlobal[2].x = 0.0; MyApp::markerPoseGlobal[2].y = 0; MyApp::markerPoseGlobal[2].z = 1;
+//	MyApp::markerPoseGlobal[7].x = 0.14; MyApp::markerPoseGlobal[7].y = -0.142; MyApp::markerPoseGlobal[7].z = 1;
+//	MyApp::markerPoseGlobal[8].x = 0.0; MyApp::markerPoseGlobal[8].y = -0.142; MyApp::markerPoseGlobal[8].z = 1;
+
+	MyApp::markerPoseGlobal[1].x = 0.57; MyApp::markerPoseGlobal[1].y = 1.93; MyApp::markerPoseGlobal[1].z = 0.142;
+	MyApp::markerPoseGlobal[2].x = 0.43; MyApp::markerPoseGlobal[2].y = 1.93; MyApp::markerPoseGlobal[2].z = 0.142;
+	MyApp::markerPoseGlobal[7].x = 0.57; MyApp::markerPoseGlobal[7].y = 1.93; MyApp::markerPoseGlobal[7].z = 0;
+	MyApp::markerPoseGlobal[8].x = 0.43; MyApp::markerPoseGlobal[8].y = 1.93; MyApp::markerPoseGlobal[8].z = 0;
+}
+
+void MyApp::markerPose2ImageLoc(geometry_msgs::PoseStamped& pose,
+			cv::Point2f& imgLocs, double K[9]){
+		double P[3] = {pose.pose.position.x, pose.pose.position.y, pose.pose.position.z};
+		double p[3];
+		p[0] = K[0] * P[0] + K[1] * P[1] + K[2] * P[2];
+		p[1] = K[3] * P[0] + K[4] * P[1] + K[5] * P[2];
+		p[2] = K[6] * P[0] + K[7] * P[1] + K[8] * P[2];
+
+		p[0] = p[0] / p[2];
+		p[1] = p[1] / p[2];
+		p[2] = 1.0;
+		imgLocs.x = p[0];
+		imgLocs.y = p[0];
 }
 
 void* MyApp::threadProc(void* data) {
@@ -772,9 +947,35 @@ void* MyApp::threadProc(void* data) {
 }
 
 void MyApp::loop(){
-	ros::Rate loop_rate(50);
+	ros::Rate loop_rate(10);
 	while (_nh.ok()){
 //		ROS_INFO("Node running\n");
+//		double org[3];
+//		for (int i = 0; i < coSLAM.numCams; i++){
+//			if (coSLAM.slam[i].m_camPos.size() > 0){
+//				CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+//				double ts = cam->ts;
+//				coSLAM.transformCamPose2Global(cam, org);
+//
+//				cv::Mat meas(2,1,CV_32F);
+//				meas.at<float>(0,0) = org[0];
+//				meas.at<float>(1,0) = 0.1;
+//				posVelKF[i][0].update(meas, ts);
+//
+//				meas.at<float>(0,0) = org[1];
+//				meas.at<float>(1,0) = 0.0;
+//				posVelKF[i][1].update(meas, ts);
+//
+//				meas.at<float>(0,0) = org[2];
+//				meas.at<float>(1,0) = 0.0;
+//				posVelKF[i][2].update(meas, ts);
+//
+//				MyApp::redis[i]->setPose(posVelKF[i][0].getPos(),
+//						posVelKF[i][1].getPos(),
+//						posVelKF[i][2].getPos());
+//			}
+//		}
+
 		ros::spinOnce();
 		loop_rate.sleep();
 	}

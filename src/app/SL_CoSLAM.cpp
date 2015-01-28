@@ -170,12 +170,12 @@ bool CoSLAM::virtualReadFrame() {
 	tm.tic();
 
 	for (int i = 0; i < numCams; i++){
-		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
-		cv::Mat img, gray;
-		MyApp::_cap[i] >> img;
-		cvtColor(img, gray, CV_BGR2GRAY);
-		memcpy(slam[i].m_rgb.data, img.data, img.cols * img.rows *3);
-		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
+//		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
+//		cv::Mat img, gray;
+//		MyApp::_cap[i] >> img;
+//		cvtColor(img, gray, CV_BGR2GRAY);
+//		memcpy(slam[i].m_rgb.data, img.data, img.cols * img.rows *3);
+//		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
 //		cv::Mat cvImg(slam[i].m_img.rows, slam[i].m_img.cols, CV_8UC1, slam[i].m_img.data);
 //		cv::Mat cvSmallImg(slam[i].m_smallImg.rows, slam[i].m_smallImg.cols, CV_8UC1,
 //				slam[i].m_smallImg.data);
@@ -184,6 +184,7 @@ bool CoSLAM::virtualReadFrame() {
 
 	curFrame++;
 	m_tmReadFrame = tm.toc();
+	ROS_INFO("VirtualReadFrame completed\n");
 	return true;
 }
 
@@ -260,7 +261,7 @@ bool CoSLAM::initMapSingleCam() {
 
 	//test
 	cout << "reconstructed number:" << npts << endl;
-	slam[0].m_camPos.add(curFrame, 0, R2.data, t2.data);
+	slam[0].m_camPos.add(curFrame, slam[0]._ts, 0, R2.data, t2.data);
 	slam[0].initTracker(curFrame);
 	m_minCamTranslation = getCameraDistance(R1, t1, R2, t2) * 0.1;
 
@@ -285,7 +286,7 @@ bool CoSLAM::initMapMultiCam() {
 		pFeatPts.push_back(&slam[i].m_featPts);
 	}
 	//generate 3D map points 
-	if(!initMapper.apply_new(curFrame, pFeatPts, curMapPts)){
+	if(!initMapper.apply_new_corner(curFrame, pFeatPts, curMapPts)){
 		for (int i =0; i < numCams; i++){
 			pFeatPts[i]->clear();
 		}
@@ -319,7 +320,7 @@ bool CoSLAM::initMapMultiCam() {
 	for (int i = 0; i < numCams; i++) {
 		slam[i].getNumMappedStaticPts();
 
-		CamPoseItem* pCamPos = slam[i].m_camPos.add(curFrame, slam[i].camId,
+		CamPoseItem* pCamPos = slam[i].m_camPos.add(curFrame, slam[i]._ts, slam[i].camId,
 				initMapper.camR[i], initMapper.camT[i]);
 
 		keyFrame->setKeyPose(i, slam[i].addKeyPose(true));
@@ -370,9 +371,211 @@ bool CoSLAM::initMapMultiCam() {
 		slam[i].updateCamParamForFeatPts(slam[i].K.data,
 				slam[i].m_camPos.current());
 	}
+
+	double org0[3], org1[3];
+	getCamCenter(slam[initMapper.camOrder[0]].m_camPos.current(), org0);
+	getCamCenter(slam[initMapper.camOrder[1]].m_camPos.current(), org1);
+	double dist = 0;
+
+	for (int i = 0; i < 3; i++){
+		dist += (org0[i] - org1[i]) * (org0[i] - org1[i]);
+	}
+	dist = std::sqrt(dist);
+	_scale = 1.0 / dist;
+
 	m_nFirstFrame = curFrame;
 	return true;
 }
+
+bool CoSLAM::calibGlobal2Cam(){
+	vector<cv::Point3f> marker_poses_global;
+	geometry_msgs::PoseStamped poses;
+	cv::Point2f imgLocs;
+	int numMarkers = 4;
+	Mat_d ms(numCams, 2);
+	Mat_d nms(numCams, 2);
+	Mat_d Ks(numCams, 9);
+	Mat_d Rs(numCams, 9);
+	Mat_d Ts(numCams, 3);
+
+	vector<cv::Point3f> marker_poses_cam;
+
+	for (int ii = 0; ii < numCams; ii++){
+		while(MyApp::markerList[ii].back().markers.size() != MyApp::_numMarkers)
+		{
+			cout << "Not enough markers detected in cam: " << ii << endl;
+		}
+	}
+
+
+	FILE* fid = fopen("debug_calibGlobal2Cam.txt", "w");
+
+	for (int i = 0; i < numMarkers; i++){
+		// for each marker
+
+		//get the marker id in the first camera
+		int id0 = MyApp::markerList[0].back().markers[i].id;
+		int id_markers = i;
+
+		for (int j = 0; j < numCams; j++){
+			//if not the first camera, find the marker id in the other camera markerlist
+			if (j > 0){
+				for (int kk = 0; kk < numMarkers; kk++){
+					if (id0 == MyApp::markerList[j].back().markers[kk].id)
+						id_markers = kk;
+				}
+			}
+			// go through all the cameras to get the location in the image
+			poses = MyApp::markerList[j].back().markers[id_markers].pose;
+			//assign the normalized coordinate
+			nms[2*j] = poses.pose.position.x / poses.pose.position.z;
+			nms[2*j + 1] = poses.pose.position.y / poses.pose.position.z;
+			CamPoseItem* cam = slam[j].m_camPos.current();
+			memcpy(Ks.data + 9 * j, slam[j].K.data, sizeof(double) * 9);
+			memcpy(Rs.data + 9 * j, cam->R, sizeof(double) * 9);
+			memcpy(Ts.data + 3 * j, cam->t, sizeof(double) * 3);
+
+			printf("%d ", MyApp::markerList[j].back().markers[id_markers].id);
+			printf("%lf %lf %lf\n", poses.pose.position.x,
+					poses.pose.position.y, poses.pose.position.z);
+		}
+		double M[3];
+		triangulateMultiView(numCams, Rs.data, Ts.data, nms.data, M);
+		marker_poses_cam.push_back(cv::Point3f(M[0], M[1], M[2]));
+		printf("C: %lf %lf %lf\n", M[0], M[1], M[2]);
+		cout << "i: " << i <<endl;
+		cout << "size: " << MyApp::markerList[0].back().markers.size() << endl;
+
+		int id = MyApp::markerList[0].back().markers[i].id;
+		cout << "id: " << id <<endl;
+
+		marker_poses_global.push_back(MyApp::markerPoseGlobal[id]);
+		printf("G: %lf %lf %lf\n", MyApp::markerPoseGlobal[id].x, MyApp::markerPoseGlobal[id].y,
+				MyApp::markerPoseGlobal[id].z);
+	}
+
+	scale_global2Cam = calibScale(marker_poses_global, marker_poses_cam);
+	for (int i = 0; i < marker_poses_cam.size(); i++){
+		printf("%lf %lf %lf\n", marker_poses_cam[i].x, marker_poses_cam[i].y, marker_poses_cam[i].z);
+	}
+	rigidTransformEsti(marker_poses_cam, marker_poses_global, R_global2Cam, t_global2Cam);
+	fprintf(fid, "scale: %lf\n", scale_global2Cam);
+	fprintf(fid, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
+			R_global2Cam[0], R_global2Cam[1], R_global2Cam[2],
+			R_global2Cam[3], R_global2Cam[4], R_global2Cam[5],
+			R_global2Cam[6], R_global2Cam[7], R_global2Cam[8]);
+	fprintf(fid, "%lf %lf %lf\n",
+				t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]);
+	fclose(fid);
+
+	return true;
+}
+
+bool CoSLAM::transformCamPose2Global(CamPoseItem* cam, double P_global[3]){
+	double P_cam[3];
+	getCamCenter(cam, P_cam);
+	P_cam[0] *= scale_global2Cam;
+	P_cam[1] *= scale_global2Cam;
+	P_cam[2] *= scale_global2Cam;
+
+	double R[9], t[3];
+	memcpy(R, R_global2Cam, 9 * sizeof(double));
+	memcpy(t, t_global2Cam, 3 * sizeof(double));
+
+	P_global[0] = R[0] * P_cam[0] + R[1] * P_cam[1] + R[2] * P_cam[2] + t[0];
+	P_global[1] = R[3] * P_cam[0] + R[4] * P_cam[1] + R[5] * P_cam[2] + t[1];
+	P_global[2] = R[6] * P_cam[0] + R[7] * P_cam[1] + R[8] * P_cam[2] + t[2];
+	return true;
+}
+
+double CoSLAM::calibScale(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB){
+	int nPts = ptsA.size();
+	int m = nPts * (nPts - 1) / 2;
+	double* A = new double[m];
+	double* B = new double[m];
+	int kk = 0;
+	for (int ii = 0; ii < nPts-1; ii++){
+		for (int jj = ii+1; jj < nPts; jj++){
+			A[kk] = cv::norm(ptsA[ii]-ptsA[jj]);
+			B[kk] = cv::norm(ptsB[ii]-ptsB[jj]);
+			kk++;
+		}
+	}
+	double scale_est = 0;
+	dgelsyFor(m,1,1,B,A,&scale_est);
+	for (int i = 0; i < nPts; i++){
+		ptsB[i] = ptsB[i] * scale_est;
+	}
+
+	delete A;
+	delete B;
+	return scale_est;
+}
+
+bool CoSLAM::rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB,
+		double* R, double* t){
+	//Compute centroids
+	cv::Mat centroid_A(3,1, CV_32F, cv::Scalar(0));
+	cv::Mat centroid_B(3,1, CV_32F, cv::Scalar(0));
+
+	int numPts = ptsA.size();
+	for (int i = 0; i< ptsA.size(); i++){
+		centroid_A.at<float>(0,0) += ptsA[i].x;
+		centroid_A.at<float>(0,1) += ptsA[i].y;
+		centroid_A.at<float>(0,2) += ptsA[i].z;
+
+		centroid_B.at<float>(0,0) += ptsB[i].x;
+		centroid_B.at<float>(0,1) += ptsB[i].y;
+		centroid_B.at<float>(0,2) += ptsB[i].z;
+	}
+	centroid_A = centroid_A / numPts;
+	centroid_B = centroid_B / numPts;
+
+	cout << "centroid_A" << centroid_A <<endl;
+	cout << "centroid_B" << centroid_B <<endl;
+
+	//Compute H
+	float H_data[9];
+	for (int i = 0; i < numPts; i++){
+		H_data[0] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].x - centroid_B.at<float>(0,0));
+		H_data[1] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].y - centroid_B.at<float>(0,1));
+		H_data[2] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+
+		H_data[3] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].x - centroid_B.at<float>(0,0));
+		H_data[4] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].y - centroid_B.at<float>(0,1));
+		H_data[5] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+
+		H_data[6] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].x - centroid_B.at<float>(0,0));
+		H_data[7] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].y - centroid_B.at<float>(0,1));
+		H_data[8] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+	}
+
+	cv::Mat H(3,3, CV_32F, H_data);
+	cv::Mat w, u, vt;
+	cv::SVD::compute(H, w, u, vt);
+	cv::Mat ut, v;
+	cv::transpose(u, ut);
+	cv::transpose(vt, v);
+	cv::Mat ret_R = v * ut;
+	if (cv::determinant(ret_R) < 0){
+		v.at<float>(0,2) = v.at<float>(0,2) * -1;
+		v.at<float>(1,2) = v.at<float>(1,2) * -1;
+		v.at<float>(2,2) = v.at<float>(2,2) * -1;
+		ret_R = v * ut;
+	}
+	cv::Mat ret_t = ret_R * centroid_A * -1 + centroid_B;
+
+	cout << "ret_R" << ret_R <<endl;
+	cout << "ret_t" << ret_t << endl;
+
+	for (int i = 0; i < 3; i++){
+		for (int j = 0; j < 3; j++){
+			R[i *3 + j] = ret_R.at<float>(i,j);
+		}
+		t[i] = ret_t.at<float>(i,0);
+	}
+}
+
 void CoSLAM::featureTracking() {
 	TimeMeasurer tm;
 	tm.tic();
@@ -2442,22 +2645,37 @@ void CoSLAM::exportResultsVer1(const char timeStr[]) const {
 	cout << filePath << " has been saved!" << endl;
 
 	//save camera poses
+	FILE* camFile;
 	for (int c = 0; c < numCams; c++) {
 		sprintf(filePath, "%s/%d_campose.txt", dirPath, c);
-		file.open(filePath);
-		if (!file)
-			repErr("cannot open file '%s' to write!\n", filePath);
+//		file.open(filePath);
+		camFile = fopen(filePath, "w");
+//		if (!file)
+//			repErr("cannot open file '%s' to write!\n", filePath);
 
-		size_t nCam = slam[c].m_camPos.size();
-		file << nCam << endl;
+		int nCam = slam[c].m_camPos.size();
+//		file << nCam << endl;
+		fprintf(camFile, "%d\n", nCam);
 		for (CamPoseItem* cam = slam[c].m_camPos.first(); cam;
 				cam = cam->next) {
-			file << getFrameInVideo(c, cam->f) << endl;
-			for (size_t i = 0; i < 9; i++)
-				file << cam->R[i] << " ";
-			file << cam->t[0] << " " << cam->t[1] << " " << cam->t[2] << endl;
+
+//			file << getFrameInVideo(c, cam->f) << " " << std::setprecision(8) <<  cam->ts << " ";
+////			printf("%d %lf ", getFrameInVideo(c, cam->f), cam->ts);
+//			for (size_t i = 0; i < 9; i++)
+//				file << cam->R[i] << " ";
+//			file << cam->t[0] << " " << cam->t[1] << " " << cam->t[2] << endl;
+
+			fprintf(camFile, "%d %.6lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
+					getFrameInVideo(c, cam->f),
+					cam->ts,
+					cam->R[0], cam->R[1], cam->R[2],
+					cam->R[3], cam->R[4], cam->R[5],
+					cam->R[6], cam->R[7], cam->R[8],
+					cam->t[0], cam->t[1], cam->t[2]);
+
 		}
-		file.close();
+//		file.close();
+		fclose(camFile);
 		cout << filePath << " has been saved!" << endl;
 	}
 

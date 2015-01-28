@@ -77,7 +77,11 @@ bool offlineMain() {
 			printf("slam[%d].m_camPos.size(): %d\n", i, coSLAM.slam[i].m_camPos.size());
 			coSLAM.state[i] = SLAM_STATE_NORMAL;
 		}
+		updateDisplayData();
+		redrawAllViews();
+//
 //		coSLAM.pause();
+//		return 0;
 
 		int endFrame = Param::nTotalFrame - Param::nSkipFrame
 				- Param::nInitFrame - 10;
@@ -97,8 +101,12 @@ bool offlineMain() {
 		vector<double> tmStepVec;
 
 		for (int i = 0; i < endFrame; i++) {
-			while (MyApp::bStop) {/*stop*/
-			}
+
+//			MyApp::bStop = true;
+//				redrawAllViews();
+//				while (MyApp::bStop) {
+//					Sleep(50);
+//				};
 			TimeMeasurer tmPerStep;
 			tmPerStep.tic();
 

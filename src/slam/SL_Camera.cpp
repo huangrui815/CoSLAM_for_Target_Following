@@ -55,10 +55,11 @@ void CamPoseList::clear() {
 	tail = 0;
 	num = 0;
 }
-CamPoseItem* CamPoseList::add(int f, int camId, const double* R,
+CamPoseItem* CamPoseList::add(int f, double ts_, int camId, const double* R,
 		const double* t) {
 	CamPoseItem* cam = new CamPoseItem();
 	cam->f = f;
+	cam->ts = ts_;
 	cam->camId = camId;
 	memcpy(cam->R, R, sizeof(double) * 9);
 	memcpy(cam->t, t, sizeof(double) * 3);

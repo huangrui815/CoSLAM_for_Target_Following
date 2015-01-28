@@ -94,6 +94,7 @@ protected:
 public:
 	void detectSurfFeats(int iCam);
 	void detectCorners(int iCam);
+	void detectCorners_CPU(int iCam);
 	void detectSiftFeats(std::vector<cv::KeyPoint>& keypoints, cv::Mat& desc, int iCam);
 
 	int estimateFmat(const Mat_d& pts1, const Mat_d& pts2, Mat_d& F,
@@ -109,6 +110,7 @@ public:
 	bool matchSurfBetween(int iCam, int jCam, double maxEpiErr = 4.0);
 
 	int matchSiftBetween(int iCam, int jCam);
+	int matchSiftBetween_usingF(int iCam, int jCam);
 
 	/* match corners between views by NCC*/
 	void matchCornerNCCBetween(int iCam, int jCam, double minNcc, double maxEpi,
@@ -133,6 +135,8 @@ public:
 	bool apply(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 			MapPointList& mapPts);
 	bool apply_new(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
+			MapPointList& mapPts);
+	bool apply_new_corner(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 			MapPointList& mapPts);
 	/* refine the map by removing points with large reprojection error*/
 	int removeOutliers(MapPointList& mapPts, double errMax);

@@ -15,6 +15,7 @@ public:
 	int camId; //camera identity
 	double R[9]; //rotation
 	double t[3]; //translation
+	double ts; // time stamp
 public:
 	CamPose();
 	CamPose(const double* R_, const double* t_);
@@ -42,7 +43,7 @@ public:
 	CamPoseList();
 	~CamPoseList();
 	void clear();
-	CamPoseItem* add(int f, int camId, const double* R, const double* t);
+	CamPoseItem* add(int f, double ts_, int camId, const double* R, const double* t);
 
 	int size() const {
 		return num;

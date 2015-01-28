@@ -45,6 +45,11 @@ public:
 	static CoSLAM* ptr;
 	int state[SLAM_MAX_NUM];
 
+	double _scale; // slam unit * _scale = 1 meter
+	double scale_global2Cam;
+	double R_global2Cam[9];
+	double t_global2Cam[3];
+
 public:
 	//to store dynamic points
 	vector<vector<Point3dId> > m_dynPts;
@@ -147,6 +152,11 @@ public:
 	bool initMap();
 	bool initMapSingleCam();
 	bool initMapMultiCam();
+	bool calibGlobal2Cam();
+	bool rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB,
+			double R[9], double t[3]);
+	double calibScale(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB);
+	bool transformCamPose2Global(CamPoseItem* cam, double P_global[3]);
 
 	/*feature tracking*/
 	void featureTracking();

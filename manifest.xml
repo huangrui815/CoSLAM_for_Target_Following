@@ -14,6 +14,8 @@
   <depend package="cv_bridge"/>
   <depend package="image_transport"/>
   <depend package="message_filters"/>
+  <depend package="coslam_feature_tracker"/>
+  <depend package="ar_track_alvar"/>
 
 </package>
 

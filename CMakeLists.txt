@@ -25,6 +25,7 @@ include( "${wxWidgets_USE_FILE}" )
 include_directories(
 /home/rui/rosbuild_ws/myROS/libvisualslam/src
 /home/rui/rosbuild_ws/myROS/coslam_gs/src
+/home/rui/rosbuild_ws/myROS/hiredis-master
 )
 
 set(COSLAM_APP
@@ -53,6 +54,11 @@ src/app/SL_Relocalization.cpp
 src/app/SL_Relocalization.h
 src/app/SL_SingleSLAM.cpp
 src/app/SL_SingleSLAM.h
+
+src/redis/cbredisclient.h
+src/redis/cbredisclient.cpp
+src/redis/PosVelKF.h
+src/redis/PosVelKF.cpp
 )
 
 set(COSLAM_GUI
@@ -169,6 +175,7 @@ set(COSLAM_LIB
 	CgGL
 	glut 
 	GLU
+	hiredis
 )
 
 add_definitions(-DV3DLIB_GPGPU_ENABLE_CG -DV3DLIB_ENABLE_GPGPU )

@@ -163,7 +163,7 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		gray.copyTo(prevGray);
 
 	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-	Size subPixWinSize(10,10), winSize(31,31);
+	Size subPixWinSize(10,10), winSize(25,25);
 	calcOpticalFlowPyrLK(prevGray, gray, points[0], points[1], status, err, winSize,
 										 3, termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS, 1e-4);
 

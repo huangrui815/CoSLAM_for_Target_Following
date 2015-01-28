@@ -97,7 +97,7 @@ void InterCamPoseEstimator::apply() {
 	int numCams = m_pCoSLAM->numCams;
 	int curFrame = m_pCoSLAM->curFrame;
 	for (int c = 0; c < numCams; c++) {
-		CamPoseItem* camPos = m_pCoSLAM->slam[c].m_camPos.add(curFrame, c, Rs[c].data, Ts[c].data);
+		CamPoseItem* camPos = m_pCoSLAM->slam[c].m_camPos.add(curFrame, m_pCoSLAM->slam[c]._ts, c, Rs[c].data, Ts[c].data);
 		m_pCoSLAM->slam[c].updateCamParamForFeatPts(m_pCoSLAM->slam[c].K.data, camPos);
 	}
 
