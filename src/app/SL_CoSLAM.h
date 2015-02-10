@@ -22,6 +22,8 @@
 #include "tools/SL_Print.h"
 #include <deque>
 #include <map>
+#include <tf2/LinearMath/Transform.h>
+
 using namespace std;
 
 void enterBACriticalSection();
@@ -49,6 +51,7 @@ public:
 	double scale_global2Cam;
 	double R_global2Cam[9];
 	double t_global2Cam[3];
+	tf2::Transform T_global2Cam;
 
 public:
 	//to store dynamic points
@@ -156,7 +159,7 @@ public:
 	bool rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB,
 			double R[9], double t[3]);
 	double calibScale(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB);
-	bool transformCamPose2Global(CamPoseItem* cam, double P_global[3]);
+	bool transformCamPose2Global(CamPoseItem* cam, double P_global[3], double rpy[3]);
 
 	/*feature tracking*/
 	void featureTracking();
@@ -180,7 +183,7 @@ public:
 
 	KeyFrame* addKeyFrame(int readyForKeyFrame[SLAM_MAX_NUM]);
 	/*generate new map points*/
-	int genNewMapPoints();
+	int genNewMapPoints(bool& merged);
 	int genNewMapPointsInterCam(bool bUseSURF);
 
 	/*camera grouping*/

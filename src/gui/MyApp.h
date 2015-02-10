@@ -47,6 +47,8 @@
 
 #define MAX_NUM_MARKERS 18
 
+class PosVelKF;
+
 class MyApp: public wxApp {
 protected:
 	void initSyncVars();
@@ -110,6 +112,8 @@ public:
 	static void markerPose2ImageLoc(geometry_msgs::PoseStamped& poses,
 			cv::Point2f& imgLocs, double K[9]);
 
+	double ComputeDesiredVel(double leaderVel, double desiredDist, double distToLeader);
+
 	static void *threadProc(void*);
 	void loop();
 	static void end();
@@ -127,10 +131,15 @@ public:
 	// Create redis clients to send command
 	static CBRedisClient* redis[SLAM_MAX_NUM];
 	static CBRedisClient* redis_start;
+	static CBRedisClient* redis_vel;
 
-//	static PosVelKF posVelKF[SLAM_MAX_NUM][3];
+	static PosVelKF posVelKF[SLAM_MAX_NUM][3];
+	static bool usingKF;
 
 	static int _numMarkers;
+
+	static vector<double> rosTime_whole;
+	static vector<double> rosTime_coslam;
 
 public:
 	static GLImageWnd* videoWnd[SLAM_MAX_NUM];

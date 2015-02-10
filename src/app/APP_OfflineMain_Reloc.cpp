@@ -78,8 +78,8 @@ bool offlineMainReloc() {
 		}
 		coSLAM.pause();
 
-		int endFrame = Param::nTotalFrame - Param::nSkipFrame
-				- Param::nInitFrame - 10;
+		int endFrame = SLAMParam::nTotalFrame - SLAMParam::nSkipFrame
+				- SLAMParam::nInitFrame - 10;
 
 		endFrame = 2000;
 
@@ -134,7 +134,8 @@ bool offlineMainReloc() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			coSLAM.genNewMapPoints();
+			bool merge = false;
+			coSLAM.genNewMapPoints(merge);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
 
 			std::cout << "debug5: " <<

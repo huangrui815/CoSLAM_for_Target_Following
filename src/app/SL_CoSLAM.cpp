@@ -117,7 +117,7 @@ void CoSLAM::init(bool bOffline) {
 		printf("load cam %d intrinsic model: \n", i);
 		print(slam[i].K);
 	}
-	Param::nTotalFrame = minFrmNum;
+	SLAMParam::nTotalFrame = minFrmNum;
 
 	//initialize the relocalizer
 	m_relocalizer = new Relocalizer[numCams];
@@ -170,12 +170,12 @@ bool CoSLAM::virtualReadFrame() {
 	tm.tic();
 
 	for (int i = 0; i < numCams; i++){
-//		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
-//		cv::Mat img, gray;
-//		MyApp::_cap[i] >> img;
-//		cvtColor(img, gray, CV_BGR2GRAY);
+		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
+		cv::Mat img, gray;
+		MyApp::_cap[i] >> img;
+		cvtColor(img, gray, CV_BGR2GRAY);
 //		memcpy(slam[i].m_rgb.data, img.data, img.cols * img.rows *3);
-//		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
+		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
 //		cv::Mat cvImg(slam[i].m_img.rows, slam[i].m_img.cols, CV_8UC1, slam[i].m_img.data);
 //		cv::Mat cvSmallImg(slam[i].m_smallImg.rows, slam[i].m_smallImg.cols, CV_8UC1,
 //				slam[i].m_smallImg.data);
@@ -408,7 +408,7 @@ bool CoSLAM::calibGlobal2Cam(){
 	}
 
 
-	FILE* fid = fopen("debug_calibGlobal2Cam.txt", "w");
+//	FILE* fid = fopen("debug_calibGlobal2Cam.txt", "w");
 
 	for (int i = 0; i < numMarkers; i++){
 		// for each marker
@@ -459,24 +459,33 @@ bool CoSLAM::calibGlobal2Cam(){
 		printf("%lf %lf %lf\n", marker_poses_cam[i].x, marker_poses_cam[i].y, marker_poses_cam[i].z);
 	}
 	rigidTransformEsti(marker_poses_cam, marker_poses_global, R_global2Cam, t_global2Cam);
-	fprintf(fid, "scale: %lf\n", scale_global2Cam);
-	fprintf(fid, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
-			R_global2Cam[0], R_global2Cam[1], R_global2Cam[2],
-			R_global2Cam[3], R_global2Cam[4], R_global2Cam[5],
-			R_global2Cam[6], R_global2Cam[7], R_global2Cam[8]);
-	fprintf(fid, "%lf %lf %lf\n",
-				t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]);
-	fclose(fid);
+//	fprintf(fid, "scale: %lf\n", scale_global2Cam);
+//	fprintf(fid, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
+//			R_global2Cam[0], R_global2Cam[1], R_global2Cam[2],
+//			R_global2Cam[3], R_global2Cam[4], R_global2Cam[5],
+//			R_global2Cam[6], R_global2Cam[7], R_global2Cam[8]);
+//	fprintf(fid, "%lf %lf %lf\n",
+//				t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]);
+//	fclose(fid);
+	tf2::Matrix3x3 rotM_global2Cam(R_global2Cam[0],R_global2Cam[1],R_global2Cam[2],
+								   R_global2Cam[3],R_global2Cam[4],R_global2Cam[5],
+								   R_global2Cam[6],R_global2Cam[7],R_global2Cam[8]);
+	T_global2Cam.setBasis(rotM_global2Cam);
+	T_global2Cam.setOrigin(tf2::Vector3(t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]));
 
 	return true;
 }
 
-bool CoSLAM::transformCamPose2Global(CamPoseItem* cam, double P_global[3]){
+bool CoSLAM::transformCamPose2Global(CamPoseItem* cam, double P_global[3], double* rpy){
 	double P_cam[3];
 	getCamCenter(cam, P_cam);
 	P_cam[0] *= scale_global2Cam;
 	P_cam[1] *= scale_global2Cam;
 	P_cam[2] *= scale_global2Cam;
+
+	double camR[9], camt[3];
+	memcpy(camR, cam->R, 9 * sizeof(double));
+	memcpy(camt, cam->t, 3 * sizeof(double));
 
 	double R[9], t[3];
 	memcpy(R, R_global2Cam, 9 * sizeof(double));
@@ -485,6 +494,18 @@ bool CoSLAM::transformCamPose2Global(CamPoseItem* cam, double P_global[3]){
 	P_global[0] = R[0] * P_cam[0] + R[1] * P_cam[1] + R[2] * P_cam[2] + t[0];
 	P_global[1] = R[3] * P_cam[0] + R[4] * P_cam[1] + R[5] * P_cam[2] + t[1];
 	P_global[2] = R[6] * P_cam[0] + R[7] * P_cam[1] + R[8] * P_cam[2] + t[2];
+
+	tf2::Transform T_cam2WorldCam;
+	tf2::Matrix3x3 rotM_cam2WorldCam(camR[0], camR[1], camR[2],
+									 camR[3], camR[4], camR[5],
+									 camR[6], camR[7], camR[8]);
+	T_cam2WorldCam.setBasis(rotM_cam2WorldCam);
+	T_cam2WorldCam.setOrigin(tf2::Vector3(camt[0], camt[1], camt[2]));
+
+	tf2::Transform T_R2WorldR = T_global2Cam * T_cam2WorldCam * T_global2Cam.inverse();
+	tf2::Transform T_worldR2R = T_R2WorldR.inverse();
+
+	T_worldR2R.getBasis().getRPY(rpy[0], rpy[1], rpy[2]);
 	return true;
 }
 
@@ -1770,7 +1791,7 @@ KeyFrame* CoSLAM::addKeyFrame(int readyForKeyFrame[SLAM_MAX_NUM]) {
 
 	return pKeyFrame;
 }
-int CoSLAM::genNewMapPoints() {
+int CoSLAM::genNewMapPoints(bool& merged) {
 	if (!allCamerasNormal())
 		return -1;
 
@@ -1819,7 +1840,7 @@ int CoSLAM::genNewMapPoints() {
 			//resetPrevFeaturePoints(pKeyFrame);
 
 			//check if there are camera groups that can be merged
-			bool merged = false;
+			merged = false;
 			if (m_groupNum > 1)
 				merged = mergeCamGroups(pKeyFrame);
 
@@ -1963,23 +1984,25 @@ bool CoSLAM::mergeCamGroups(KeyFrame* newFrame) {
 	for (int i = 0; i < numCams; i++)
 		mcg.setImageSize(i, slam[i].m_img.w, slam[i].m_img.h);
 
-	if( curFrame < 5600 && curFrame < m_lastFrmGroupMerge + 130)
-		return false;
+	// Commented by Rui
+//	if( curFrame < 5600 && curFrame < m_lastFrmGroupMerge + 130)
+//		return false;
 	
-	if (((curFrame > 1475 && curFrame < 1530)
-			|| (curFrame > 1758 && curFrame < 1850)
-			|| (curFrame > 2800 && curFrame < 3000)
-			|| (curFrame > 3600 && curFrame < 3900)
-			|| (curFrame > 4150 && curFrame < 4241) || (curFrame > 5600))
-
-	&& mcg.checkPossibleMergable(10, 0.5, Param::maxDistRatio) > 0) {
+//	if (((curFrame > 1475 && curFrame < 1530)
+//			|| (curFrame > 1758 && curFrame < 1850)
+//			|| (curFrame > 2800 && curFrame < 3000)
+//			|| (curFrame > 3600 && curFrame < 3900)
+//			|| (curFrame > 4150 && curFrame < 4241) || (curFrame > 5600))
+//
+//	&& mcg.checkPossibleMergable(10, 0.5, SLAMParam::maxDistRatio) > 0) {
+	if (mcg.checkPossibleMergable(10, 0.5, SLAMParam::maxDistRatio) > 0) {
 		//test
 		//pause();
-#ifdef WIN32
-		Sleep(3000);
-#else
-		sleep(3);
-#endif
+//#ifdef WIN32
+//		Sleep(3000);
+//#else
+//		sleep(3);
+//#endif
 		//store the images and feature points
 		for (int i = 0; i < numCams; i++)
 			newFrame->pPose[i]->setImage(slam[i].m_img);
@@ -2046,7 +2069,7 @@ bool CoSLAM::mergeCamGroups(KeyFrame* newFrame) {
 			//test
 			//pause();
 
-			currentMapPointsRegister(20.0, true);
+			currentMapPointsRegister(10.0, true);
 			logInfo("feature points have been merged!\n");
 
 			m_lastFrmGroupMerge = curFrame;
@@ -2125,7 +2148,7 @@ int CoSLAM::genNewMapPointsInterCam(bool bUseSURF) {
 		NewMapPtsNCC matcher;
 
 		//to avoid frequently calling inter-camera mapping if there are enough map points already
-		const int thresNum = Param::nMaxMapPts;
+		const int thresNum = SLAMParam::nMaxMapPts;
 		for (int i = 0; i < m_groupNum; i++) {
 			if (m_groups[i].num <= 1)
 				continue;
@@ -2263,7 +2286,7 @@ int CoSLAM::cameraGrouping() {
 			//cout << " " << j << "-" << d << " ";
 			if (viewOverlapCost[i * numCams + j] > 0
 					&& dist3(M1, M2)
-							> m_initCamTranslation * Param::maxDistRatio) {
+							> m_initCamTranslation * SLAMParam::maxDistRatio) {
 
 				viewOverlapCost[i * numCams + j] = -1;
 				viewOverlapCost[j * numCams + i] = -1;
@@ -2426,6 +2449,7 @@ void CoSLAM::pause() {
 	MyApp::bStop = true;
 	redrawAllViews();
 	while (MyApp::bStop) {
+		Sleep(3);
 	};
 }
 void CoSLAM::printCamGroup() {
@@ -2840,7 +2864,7 @@ bool CoSLAM::doRelocalization(int camid){
 
 void CoSLAM::endRelocalization(int camid){
 	state[camid] = SLAM_STATE_RECOVERED;
-	_frmNumAfterReloc = Param::frmNumAfterRelocalization;
+	_frmNumAfterReloc = SLAMParam::frmNumAfterRelocalization;
 	cout << "Recovered!" << endl;
 }
 

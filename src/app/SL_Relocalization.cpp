@@ -118,7 +118,7 @@ bool Relocalizer::tryToRecover() {
 
 	SingleSLAM& tracker = _coSLAM->slam[camId];
 	enterBACriticalSection();
-	KeyPose* kf = searchKeyPosebyThumbImage(Param::MAX_COST_KEY_FRM);
+	KeyPose* kf = searchKeyPosebyThumbImage(SLAMParam::MAX_COST_KEY_FRM);
 	leaveBACriticalSection();
 
 	if (!kf)

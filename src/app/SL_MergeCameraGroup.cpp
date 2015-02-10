@@ -672,23 +672,23 @@ bool MergeCameraGroup::genMergeInfoVer2(int gId1, int gId2, int maxiCam,
 
 	/////////////////////////////only for debug/////////////////////////////////
 	//test
-	write(Ks, "/home/tsou/test/Ks_old.txt");
-	write(Rs, "/home/tsou/test/Rs_old.txt");
-	write(ts, "/home/tsou/test/ts_old.txt");
-	write(pts3d, "/home/tsou/test/pts3d_old.txt");
-	write(meas2ds, "/home/tsou/test/meas2ds_old.txt");
+//	write(Ks, "/home/tsou/test/Ks_old.txt");
+//	write(Rs, "/home/tsou/test/Rs_old.txt");
+//	write(ts, "/home/tsou/test/ts_old.txt");
+//	write(pts3d, "/home/tsou/test/pts3d_old.txt");
+//	write(meas2ds, "/home/tsou/test/meas2ds_old.txt");
 
 	//bundle adjust robust
 	bundleAdjustRobust(1, Ks, Rs, ts, 1, pts3d, meas2ds, 800, 1, 100);
 	bundleAdjustRobust(1, Ks, Rs, ts, 1, pts3d, meas2ds, 30, 5, 30);
 
 	//test
-	write(Ks, "/home/tsou/test/Ks.txt");
-	write(Rs, "/home/tsou/test/Rs.txt");
-	write(ts, "/home/tsou/test/ts.txt");
-
-	write(pts3d, "/home/tsou/test/pts3d.txt");
-	write(meas2ds, "/home/tsou/test/meas2ds.txt");
+//	write(Ks, "/home/tsou/test/Ks.txt");
+//	write(Rs, "/home/tsou/test/Rs.txt");
+//	write(ts, "/home/tsou/test/ts.txt");
+//
+//	write(pts3d, "/home/tsou/test/pts3d.txt");
+//	write(meas2ds, "/home/tsou/test/meas2ds.txt");
 
 	//save the images at key poses
 //	for (int n = 0; n < nPose; ++n) {
@@ -1117,7 +1117,7 @@ void MergeCameraGroup::_constructGraphForKeyFrms(KeyFrame* frame0,
 		}
 	}
 //test
-	write(graph, "/home/tsou/test/graph.txt");
+//	write(graph, "/home/tsou/test/graph.txt");
 }
 
 void MergeCameraGroup::_constructGraphForAllFrms(KeyFrame* frame0,

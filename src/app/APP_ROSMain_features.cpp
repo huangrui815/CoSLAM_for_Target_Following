@@ -100,7 +100,8 @@ bool ROSMain_features() {
 				//initialise the map points
 				if (coSLAM.initMap()){
 
-					coSLAM.calibGlobal2Cam();
+					// Need this in real test
+//					coSLAM.calibGlobal2Cam();
 
 					for (int i = 0; i < coSLAM.numCams; i++)
 						coSLAM.state[i] = SLAM_STATE_NORMAL;
@@ -121,16 +122,11 @@ bool ROSMain_features() {
 			coSLAM.state[i] = SLAM_STATE_NORMAL;
 		}
 
-		MyApp::redis[0] = new CBRedisClient("odroid01", "192.168.1.137", 6379);
-		MyApp::redis[1] = new CBRedisClient("odroid03", "192.168.1.137", 6379);
-		MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
-
-
 //		return 0;
 //		coSLAM.pause();
 
-		int endFrame = Param::nTotalFrame - Param::nSkipFrame
-				- Param::nInitFrame - 10;
+		int endFrame = SLAMParam::nTotalFrame - SLAMParam::nSkipFrame
+				- SLAMParam::nInitFrame - 10;
 //		int endFrame = 500;
 
 //		endFrame = 1500;
@@ -146,7 +142,7 @@ bool ROSMain_features() {
 
 
 		vector<double> poseSent[SLAM_MAX_NUM];
-		vector<double> rosTime;
+//		vector<double> rosTime;
 
 		while (!MyApp::bExit) {
 //			while (MyApp::bStop) {/*stop*/
@@ -162,26 +158,26 @@ bool ROSMain_features() {
 
 			coSLAM.poseUpdate(bEstPose);
 			//Use redis to send over the poses
-			rosTime.push_back(ros::Time::now().toSec());
 
-			for (int i = 0; i < coSLAM.numCams; i++){
-				double org[3];
-//				getCamCenter(coSLAM.slam[i].m_camPos.current(), org);
-				coSLAM.transformCamPose2Global(coSLAM.slam[i].m_camPos.current(), org);
 
-				MyApp::redis[i]->setPose(org[0], org[1], org[2]);
-
-				double ts = coSLAM.slam[i].m_camPos.current()->ts;
-				poseSent[i].push_back(ts);
-				poseSent[i].push_back(org[0]);
-				poseSent[i].push_back(org[1]);
-				poseSent[i].push_back(org[2]);
-				rosTime.push_back(ts);
-			}
-			if (MyApp::bStartMove){
-				MyApp::redis_start->setCommand("go");
-				MyApp::bStartMove = false;
-			}
+//			for (int i = 0; i < coSLAM.numCams; i++){
+//				double org[3];
+////				getCamCenter(coSLAM.slam[i].m_camPos.current(), org);
+//				coSLAM.transformCamPose2Global(coSLAM.slam[i].m_camPos.current(), org);
+//
+//				MyApp::redis[i]->setPose(org[0], org[1], org[2]);
+//
+//				double ts = coSLAM.slam[i].m_camPos.current()->ts;
+//				poseSent[i].push_back(ts);
+//				poseSent[i].push_back(org[0]);
+//				poseSent[i].push_back(org[1]);
+//				poseSent[i].push_back(org[2]);
+//				rosTime.push_back(ts);
+//			}
+//			if (MyApp::bStartMove){
+//				MyApp::redis_start->setCommand("go");
+//				MyApp::bStartMove = false;
+//			}
 
 			//coSLAM.pause();
 			coSLAM.cameraGrouping();
@@ -191,8 +187,10 @@ bool ROSMain_features() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			coSLAM.genNewMapPoints();
+			bool merged = false;
+			coSLAM.genNewMapPoints(merged);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
+			cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
 
 			//point registration
 			coSLAM.currentMapPointsRegister(Const::PIXEL_ERR_VAR,
@@ -203,8 +201,6 @@ bool ROSMain_features() {
 			updateDisplayData();
 			redrawAllViews();
 
-			coSLAM.m_tmPerStep = tmPerStep.toc();
-			tmStepVec.push_back(coSLAM.m_tmPerStep);
 //			Sleep(50);
 
 			if (i % 500 == 0) {
@@ -213,13 +209,25 @@ bool ROSMain_features() {
 				coSLAM.m_lastReleaseFrm = coSLAM.curFrame;
 			}
 
+			coSLAM.m_tmPerStep = tmPerStep.toc();
+			tmStepVec.push_back(coSLAM.m_tmPerStep);
+
 			MyApp::triggerClients();
 		}
 
-		for (int i = 0; i < coSLAM.numCams; i++){
-			delete MyApp::redis[i];
+		FILE* fid = fopen("/home/rui/rosTime.txt","w");
+		for (int i = 0; i < MyApp::rosTime_whole.size(); i = i + 4){
+			fprintf(fid, "%lf %lf %lf %lf\n",
+					MyApp::rosTime_whole[i], MyApp::rosTime_whole[i+1],
+					MyApp::rosTime_whole[i+2], MyApp::rosTime_whole[i+3]);
 		}
-		delete MyApp::redis_start;
+		fclose(fid);
+
+		fid = fopen("/home/rui/coslamTime.txt","w");
+		for (int i = 0; i < tmStepVec.size(); i++){
+			fprintf(fid, "%lf\n", tmStepVec[i]);
+		}
+		fclose(fid);
 
 		cout << " the result is saved at " << MyApp::timeStr << endl;
 		coSLAM.exportResults(MyApp::timeStr);
@@ -241,7 +249,7 @@ bool ROSMain_features() {
 //					poseSent[1][i+1], poseSent[1][i+2], poseSent[1][i+3]);
 //		fclose(fid);
 //
-//		fid = fopen("rosTime.txt","w");
+//		FILE* fid = fopen("rosTime.txt","w");
 //		for (int i = 0; i < rosTime.size(); i = i + coSLAM.numCams + 1){
 //			for (int j = 0; j <= coSLAM.numCams; j++){
 //				fprintf(fid, "%lf ", rosTime[i+j]);

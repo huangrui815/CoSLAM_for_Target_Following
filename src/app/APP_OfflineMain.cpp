@@ -83,11 +83,11 @@ bool offlineMain() {
 //		coSLAM.pause();
 //		return 0;
 
-		int endFrame = Param::nTotalFrame - Param::nSkipFrame
-				- Param::nInitFrame - 10;
+		int endFrame = SLAMParam::nTotalFrame - SLAMParam::nSkipFrame
+				- SLAMParam::nInitFrame - 10;
 
-		cout << "Total frame: " << Param::nTotalFrame << " skip frame: " << Param::nSkipFrame <<
-				"init frame: " << Param::nInitFrame <<endl;
+		cout << "Total frame: " << SLAMParam::nTotalFrame << " skip frame: " << SLAMParam::nSkipFrame <<
+				"init frame: " << SLAMParam::nInitFrame <<endl;
 //		int endFrame = 500;
 
 //		endFrame = 1500;
@@ -122,8 +122,10 @@ bool offlineMain() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			coSLAM.genNewMapPoints();
+			bool merge = false;
+			coSLAM.genNewMapPoints(merge);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
+			cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
 
 			//point registration
 			coSLAM.currentMapPointsRegister(Const::PIXEL_ERR_VAR,
@@ -142,6 +144,10 @@ bool offlineMain() {
 				//coSLAM.releaseFeatPts(coSLAM.curFrame - 500);
 				coSLAM.releaseKeyPoseImgs(coSLAM.curFrame - 500);
 				coSLAM.m_lastReleaseFrm = coSLAM.curFrame;
+			}
+
+			if (merge){
+				coSLAM.pause();
 			}
 		}
 		cout << " the result is saved at " << MyApp::timeStr << endl;

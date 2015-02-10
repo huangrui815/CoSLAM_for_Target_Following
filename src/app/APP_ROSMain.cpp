@@ -86,8 +86,8 @@ bool ROSMain() {
 		}
 //		coSLAM.pause();
 
-		int endFrame = Param::nTotalFrame - Param::nSkipFrame
-				- Param::nInitFrame - 10;
+		int endFrame = SLAMParam::nTotalFrame - SLAMParam::nSkipFrame
+				- SLAMParam::nInitFrame - 10;
 //		int endFrame = 500;
 
 //		endFrame = 1500;
@@ -120,7 +120,8 @@ bool ROSMain() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			coSLAM.genNewMapPoints();
+			bool merged = false;
+			coSLAM.genNewMapPoints(merged);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
 
 			//point registration

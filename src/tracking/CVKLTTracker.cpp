@@ -13,9 +13,14 @@ CVKLTTracker::CVKLTTracker(){
 	_speedChangeMax = 200000000.0;
 	_bLost = false;
 	_recoverFrmNum = 0;
-	_trackingDistanceConstraint = 45 *45;
+	_trackingDistanceConstraint = 40 *40;
 									//30 * 30; //for tsing hua videos (752 x 480)
 	                             // 400; for ardrone video (630 x 360)
+		_detector = new cv::BRISK();
+	//	_detector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 20, 3, 0, 0.04);
+//		_detector = new cv::FastFeatureDetector(30, true);
+//		_detector = new cv::StarFeatureDetector();
+//	_detector = new cv::OrbFeatureDetector(KLT_MAX_FEATURE_NUM);
 }
 CVKLTTracker::~CVKLTTracker() {
 
@@ -163,7 +168,7 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		gray.copyTo(prevGray);
 
 	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-	Size subPixWinSize(10,10), winSize(25,25);
+	Size subPixWinSize(10,10), winSize(20,20);
 	calcOpticalFlowPyrLK(prevGray, gray, points[0], points[1], status, err, winSize,
 										 3, termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS, 1e-4);
 
@@ -407,10 +412,10 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 //	GoodFeaturesToTrackDetector detector(param.maxCorners, param.qualityLevel,
 //			param.minDistance, param.blockSize, param.useHarrisDetector,
 //			param.k);
-	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-	Size subPixWinSize(10,10), winSize(31,31);
-
-	GoodFeaturesToTrackDetector detector(KLT_MAX_FEATURE_NUM, 0.01, 20, 3, 0, 0.04);
+//	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
+//	Size subPixWinSize(10,10), winSize(31,31);
+//
+//	GoodFeaturesToTrackDetector detector(KLT_MAX_FEATURE_NUM, 0.01, 20, 3, 0, 0.04);
 
 //	Mat cvImg(_img2.m, _img2.n, CV_8UC1, _img2.data);
 
@@ -420,7 +425,7 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 
 	vector<KeyPoint> keyPts;
 	Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
-	detector.detect(gray, keyPts, cvMask);
+	_detector->detect(gray, keyPts, cvMask);
 
     //
 	int nptsnew = (int) keyPts.size();

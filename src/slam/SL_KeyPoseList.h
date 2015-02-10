@@ -159,7 +159,6 @@ public:
 		int k = 0;
 		for (const MapPoint* mpt = curMapPts.getHead();
 				mpt != curMapPts.getTail(); mpt = mpt->next) {
-			std::cout << ++k << endl;
 			if (mpt && mpt->isLocalDynamic()) {
 				MapPoint* newMpt = new MapPoint(*mpt);
 				dynMapPoints.add(newMpt);

@@ -285,7 +285,7 @@ bool InitMap::apply(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 	double numMapPts = (nSurfPts + nCorners - numOutliers) * 1.0;
 	double ratioInitMappedPts = numMapPts / (m_numSurfTracks + m_numCornerTracks);
 	printf("ratioInitMappedPts: %f\n", ratioInitMappedPts);
-	if ( ratioInitMappedPts < Param::minRatioInitMapPts ||
+	if ( ratioInitMappedPts < SLAMParam::minRatioInitMapPts ||
 			numMapPts < 10)
 		return false;
 	return true;
@@ -340,7 +340,7 @@ bool InitMap::apply_new(int frame0, std::vector<FeaturePoints*>& pFeaturePts,
 	double numMapPts = (nSurfPts - numOutliers) * 1.0;
 	double ratioInitMappedPts = numMapPts / (m_numSurfTracks);
 	printf("ratioInitMappedPts: %f\n", ratioInitMappedPts);
-	if ( ratioInitMappedPts < Param::minRatioInitMapPts ||
+	if ( ratioInitMappedPts < SLAMParam::minRatioInitMapPts ||
 			numMapPts < 10)
 		return false;
 	return true;
@@ -398,7 +398,7 @@ bool InitMap::apply_new_corner(int frame0, std::vector<FeaturePoints*>& pFeature
 	double numMapPts = (nSurfPts + nCorners - numOutliers) * 1.0;
 	double ratioInitMappedPts = numMapPts / (m_numSurfTracks + m_numCornerTracks);
 	printf("ratioInitMappedPts: %f\n", ratioInitMappedPts);
-	if ( ratioInitMappedPts < Param::minRatioInitMapPts ||
+	if ( ratioInitMappedPts < SLAMParam::minRatioInitMapPts ||
 			numMapPts < 10)
 		return false;
 	return true;

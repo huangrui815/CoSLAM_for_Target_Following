@@ -14,6 +14,11 @@
 #include <cv_bridge/cv_bridge.h>
 #include <std_msgs/Byte.h>
 
+#include "redis/PosVelKF.h"
+#include "slam/SL_SLAMHelper.h"
+
+//Chatterbox stuff
+#define FORWARD_SPEED 0.05
 
 using namespace std;
 using namespace sensor_msgs;
@@ -75,11 +80,16 @@ pthread_t MyApp::_nodeThread;
 
 CBRedisClient* MyApp::redis[SLAM_MAX_NUM];
 CBRedisClient* MyApp::redis_start;
+CBRedisClient* MyApp::redis_vel;
 
-//PosVelKF MyApp::posVelKF[SLAM_MAX_NUM][3];
+PosVelKF MyApp::posVelKF[SLAM_MAX_NUM][3];
 
 cv::Point3f MyApp::markerPoseGlobal[MAX_NUM_MARKERS];
 int MyApp::_numMarkers = 4;
+bool MyApp::usingKF = false;
+
+vector<double> MyApp::rosTime_whole;
+vector<double> MyApp::rosTime_coslam;
 
 DEFINE_EVENT_TYPE(CloseApp);
 BEGIN_EVENT_TABLE(MyApp, wxApp)
@@ -232,9 +242,12 @@ bool MyApp::initOffline() {
 //	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
 //	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_6.avi");
 //
-	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video0.avi");
-	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/2014-12-11-16-16-56/video1.avi");
+//	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video0.avi");
+//	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video1.avi");
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video0_merge.avi");
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video1_merge.avi");
 
+//	SLAMParam::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data59/video.avi");
 
 //	Param::camFilePath.push_back(
 //			"/home/rui/workspace/calibrations/0578_cal_new.txt");
@@ -253,7 +266,7 @@ bool MyApp::initOffline() {
 	
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
+//	SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
 
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
@@ -263,9 +276,9 @@ bool MyApp::initOffline() {
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
 //	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
 
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
 
 	vector<int> startFrame;
@@ -275,19 +288,19 @@ bool MyApp::initOffline() {
 
 //	startFrame.push_back(640);
 //	startFrame.push_back(640);
-	startFrame.push_back(250);
-	startFrame.push_back(250);
+	startFrame.push_back(60);
+	startFrame.push_back(60);
 
 
-	Param::nInitFrame = 0;
-	Param::SSD_Threshold = 2000; //20000;
-	Param::minCornerness = 800; //2500; //800;
+	SLAMParam::nInitFrame = 0;
+	SLAMParam::SSD_Threshold = 2000; //20000;
+	SLAMParam::minCornerness = 800; //2500; //800;
 	
 	
 
-	for (size_t i = 0; i < Param::videoFilePath.size(); ++i) {
-		coSLAM.addVideo(Param::videoFilePath[i].c_str(),
-				Param::camFilePath[i].c_str(), startFrame[i]);
+	for (size_t i = 0; i < SLAMParam::videoFilePath.size(); ++i) {
+		coSLAM.addVideo(SLAMParam::videoFilePath[i].c_str(),
+				SLAMParam::camFilePath[i].c_str(), startFrame[i]);
 	}
 
 //	coSLAM.addVideo(Param::videoFilePath[2].c_str(),
@@ -298,7 +311,7 @@ bool MyApp::initOffline() {
 //			GlobParam::Ref().m_camFilePath[0].c_str(),
 //			GlobParam::Ref().m_nSkipFrame);
 
-	coSLAM.setInitFrame(Param::nInitFrame);
+	coSLAM.setInitFrame(SLAMParam::nInitFrame);
 
 	preWaitCreateGUI();
 
@@ -362,24 +375,24 @@ bool MyApp::initUSBCam() {
 	getCurTimeString(timeStr);
 
 #ifdef WIN32
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 				"/home/rui/workspace/calibrations/0578_cal.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 					"/home/rui/workspace/calibrations/0578_cal.txt");
 #else
-//	Param::camFilePath.push_back(
+//	SLAMParam::camFilePath.push_back(
 //				"/home/rui/workspace/calibrations/asusCam.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/logiCam.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/logiCam.txt");
 #endif
 
-	Param::SSD_Threshold = 20000; //20000;
-	Param::minCornerness = 550; //800;
+	SLAMParam::SSD_Threshold = 20000; //20000;
+	SLAMParam::minCornerness = 550; //800;
 
-	for (size_t i = 0; i < Param::camFilePath.size(); ++i) {
-		coSLAM.addCam(Param::camFilePath[i].c_str());
+	for (size_t i = 0; i < SLAMParam::camFilePath.size(); ++i) {
+		coSLAM.addCam(SLAMParam::camFilePath[i].c_str());
 		int camId = i + 1;
 		MyApp::usbReader[i]._camid = camId;
 		coSLAM.slam[i].videoReader = &MyApp::usbReader[i];
@@ -443,24 +456,24 @@ bool MyApp::initROS() {
 	getCurTimeString(timeStr);
 
 #ifdef WIN32
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 				"/home/rui/workspace/calibrations/0578_cal.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 					"/home/rui/workspace/calibrations/0578_cal.txt");
 #else
-//	Param::camFilePath.push_back(
+//	SLAMParam::camFilePath.push_back(
 //				"/home/rui/workspace/calibrations/asusCam.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
 #endif
 
-	Param::SSD_Threshold = 20000; //20000;
-	Param::minCornerness = 550; //800;
+	SLAMParam::SSD_Threshold = 20000; //20000;
+	SLAMParam::minCornerness = 550; //800;
 
-	for (size_t i = 0; i < Param::camFilePath.size(); ++i) {
-		coSLAM.addCam(Param::camFilePath[i].c_str());
+	for (size_t i = 0; i < SLAMParam::camFilePath.size(); ++i) {
+		coSLAM.addCam(SLAMParam::camFilePath[i].c_str());
 		int camId = i + 1;
 		MyApp::rosReader[i]._camid = camId;
 		coSLAM.slam[i].videoReader = &MyApp::rosReader[i];
@@ -532,39 +545,42 @@ bool MyApp::initROS_features() {
 	getCurTimeString(timeStr);
 
 #ifdef WIN32
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 				"/home/rui/workspace/calibrations/0578_cal.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 					"/home/rui/workspace/calibrations/0578_cal.txt");
 #else
-//	Param::camFilePath.push_back(
+//	SLAMParam::camFilePath.push_back(
 //				"/home/rui/workspace/calibrations/asusCam.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
-	Param::camFilePath.push_back(
+	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/odroid.txt");
-//	Param::camFilePath.push_back(
+//	SLAMParam::camFilePath.push_back(
 //			"/home/rui/workspace/calibrations/odroid.txt");
 
-//		Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-//		Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+//		SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+//		SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
 #endif
-//		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
-//		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
-		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video0.avi");
-		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
-//		Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video0.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
 
-		_camNum = Param::camFilePath.size();
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video0_merge.avi");
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video1_merge.avi");
 
-	Param::SSD_Threshold = 20000; //20000;
-	Param::minCornerness = 550; //800;
+		_camNum = SLAMParam::camFilePath.size();
 
-	for (size_t i = 0; i < Param::camFilePath.size(); ++i) {
-		coSLAM.addCam(Param::camFilePath[i].c_str());
-//		coSLAM.addVideo(Param::videoFilePath[i].c_str(),
-//					Param::camFilePath[i].c_str());
-		_cap[i].open(Param::videoFilePath[i]);
+	SLAMParam::SSD_Threshold = 20000; //20000;
+	SLAMParam::minCornerness = 550; //800;
+
+	for (size_t i = 0; i < SLAMParam::camFilePath.size(); ++i) {
+		coSLAM.addCam(SLAMParam::camFilePath[i].c_str());
+//		coSLAM.addVideo(SLAMParam::videoFilePath[i].c_str(),
+//					SLAMParam::camFilePath[i].c_str());
+		_cap[i].open(SLAMParam::videoFilePath[i]);
 		int camId = i + 1;
 		MyApp::rosReader[i]._camid = camId;
 		coSLAM.slam[i].videoReader = &MyApp::rosReader[i];
@@ -572,6 +588,11 @@ bool MyApp::initROS_features() {
 	}
 
 	// Initialize the ROS node
+	MyApp::redis[0] = new CBRedisClient("odroid01", "192.168.1.137", 6379);
+	MyApp::redis[1] = new CBRedisClient("odroid03", "192.168.1.137", 6379);
+	MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
+	MyApp::redis_vel = new CBRedisClient("vel", "192.168.1.137", 6379);
+
 	videoNodeInit();
 	featureNodeInit();
 	arMarkerNodeInit();
@@ -946,39 +967,158 @@ void* MyApp::threadProc(void* data) {
 	return 0;
 }
 
+double MyApp::ComputeDesiredVel(double leaderVel, double desiredDist, double distToLeader){
+	double desiredVel = 0;
+	double T2C = 10.0;
+	if (distToLeader >= desiredDist) {
+	  desiredVel = leaderVel - (desiredDist - distToLeader) / T2C;
+	}
+	else {
+	   desiredVel = 0;
+	}
+	return desiredVel;
+}
+
 void MyApp::loop(){
 	ros::Rate loop_rate(10);
+	double ts_last;
+	double org_last[3];
+	bool last_set = false;
+
 	while (_nh.ok()){
-//		ROS_INFO("Node running\n");
-//		double org[3];
-//		for (int i = 0; i < coSLAM.numCams; i++){
-//			if (coSLAM.slam[i].m_camPos.size() > 0){
-//				CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
-//				double ts = cam->ts;
-//				coSLAM.transformCamPose2Global(cam, org);
-//
-//				cv::Mat meas(2,1,CV_32F);
-//				meas.at<float>(0,0) = org[0];
-//				meas.at<float>(1,0) = 0.1;
-//				posVelKF[i][0].update(meas, ts);
-//
-//				meas.at<float>(0,0) = org[1];
-//				meas.at<float>(1,0) = 0.0;
-//				posVelKF[i][1].update(meas, ts);
-//
-//				meas.at<float>(0,0) = org[2];
-//				meas.at<float>(1,0) = 0.0;
-//				posVelKF[i][2].update(meas, ts);
-//
-//				MyApp::redis[i]->setPose(posVelKF[i][0].getPos(),
-//						posVelKF[i][1].getPos(),
-//						posVelKF[i][2].getPos());
-//			}
-//		}
+		bool SLAM_ready = true;
+		for (int i = 0; i < coSLAM.numCams; i++)
+			if (coSLAM.state[i] != SLAM_STATE_NORMAL)
+				SLAM_ready =false;
+
+//		float vel = 0;
+//		MyApp::redis_vel->getOdometryPose(vel);
+//		printf("%f\n", vel);
+
+		if (SLAM_ready){
+			if (MyApp::usingKF){
+				double org[SLAM_MAX_NUM][3], rpy[SLAM_MAX_NUM][3];
+				double ts = -1;;
+				double ts_curr = -1;
+				int follower_id = 0;
+				int leader_id = 1;
+				vector<int> stateFlag(SLAM_MAX_NUM, 0);
+				stateFlag[leader_id] = 1;
+
+
+				for (int i = 0; i < coSLAM.numCams; i++){
+					if (coSLAM.slam[i].m_camPos.size() > 0){
+						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+//						if (stateFlag[i] == 0 && ts < 0){
+//							ts = cam->ts;
+//						}
+
+						coSLAM.transformCamPose2Global(cam, org[i], rpy[i]);
+					}
+				}
+
+				for (int i = 0; i < coSLAM.numCams; i++){
+						double vel = 0;
+
+						std::string cmd;
+						if (MyApp::redis_start->getStart(cmd)){
+							if (stateFlag[i] == 0){
+								float distToLeader = (org[0][0] - org[1][0]) * (org[0][0] - org[1][0]);
+								distToLeader += (org[0][1] - org[1][1]) * (org[0][1] - org[1][1]);
+								distToLeader = std::sqrt(distToLeader);
+
+								//get odometry meas from the redis
+								vel = ComputeDesiredVel(FORWARD_SPEED, 1.0, distToLeader);
+							}
+							else{
+								vel = FORWARD_SPEED;
+							}
+						}
+
+						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+						ts = cam->ts;
+
+		//				MyApp::redis_vel->getOdometryPose(vel);
+						float x_vel, y_vel;
+
+						cv::Mat meas(2,1,CV_32F);
+
+						meas.at<float>(0,0) = rpy[i][2];
+						meas.at<float>(1,0) = 0;
+						posVelKF[i][2].updatePos(meas, ts, 0.1);
+						double yaw = posVelKF[i][2].getPos();
+						x_vel = vel * cos(yaw);
+						y_vel = vel * sin(yaw);
+
+						meas.at<float>(0,0) = org[i][0];
+						meas.at<float>(1,0) = x_vel;
+						posVelKF[i][0].update(meas, ts);
+
+						meas.at<float>(0,0) = org[i][1];
+						meas.at<float>(1,0) = y_vel;
+						posVelKF[i][1].update(meas, ts);
+
+						ts_curr = ros::Time::now().toSec();
+						MyApp::redis[i]->setPose(ts, ts_curr,
+								posVelKF[i][0].getPredPos(ts_curr),
+								posVelKF[i][0].getVel(),
+								posVelKF[i][1].getPredPos(ts_curr),
+								posVelKF[i][1].getVel(),
+								posVelKF[i][2].getPredPos(ts_curr)
+								);
+
+						printf("posx: %lf velx: %lf posy: %lf vely: %lf\n",
+								posVelKF[i][0].getPredPos(ts_curr), posVelKF[i][0].getVel(),
+								posVelKF[i][1].getPredPos(ts_curr),posVelKF[i][1].getVel());
+
+						rosTime_whole.push_back(ts);
+						rosTime_whole.push_back(ros::Time::now().toSec());
+					}
+				}
+			else
+			{
+				for (int i = 0; i < coSLAM.numCams; i++)
+				{
+					if (coSLAM.slam[i].m_camPos.size() > 0){
+						double org[3], rpy[3];
+						double vel[3];
+
+						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+						double ts = cam->ts;
+						getCamCenter(cam, org);
+						coSLAM.transformCamPose2Global(cam, org, rpy);
+
+						if (!last_set){
+							vel[0] = 0;
+							vel[1] = 0;
+							ts_last = ts;
+							memcpy(org_last, org, 3 * sizeof(double));
+							ts_last = ts;
+							last_set = true;
+						}
+						else{
+							vel[0] = (org[0] - org_last[0]) / (ts - ts_last);
+							vel[1] = (org[1] - org_last[1]) / (ts - ts_last);
+							ts_last = ts;
+							memcpy(org_last, org, 3 * sizeof(double));
+						}
+
+						MyApp::redis[i]->setPose(ts, ros::Time::now().toSec(), org[0], vel[0], org[1], vel[1], rpy[2]);
+						rosTime_whole.push_back(ts);
+						rosTime_whole.push_back(ros::Time::now().toSec());
+					}
+				}
+			}
+		}
 
 		ros::spinOnce();
 		loop_rate.sleep();
 	}
+
+	for (int i = 0; i < coSLAM.numCams; i++){
+		delete MyApp::redis[i];
+	}
+	delete MyApp::redis_start;
 }
 
 void MyApp::end()
@@ -994,14 +1134,14 @@ bool MyApp::OnInit() {
 //	wxPNGHandler* png = new wxPNGHandler;
 //	wxImage::AddHandler(png);
 
-//  	if (!initOffline())
-//  		return false;
+  	if (!initOffline())
+  		return false;
 
 //  	if (!initROS())
 //  		return false;
 
-  	if (!initROS_features())
-  		return false;
+//  	if (!initROS_features())
+//  		return false;
 
 //
 // 	if (!initUSBCam())

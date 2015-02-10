@@ -294,12 +294,12 @@ int SingleSLAM::initTracker(int f, vector<FeaturePoint*>& existFeatPoints) {
 //	}
 
 	V3D_GPU::KLT_SequenceTrackerConfig cfg;
-	cfg.minCornerness = Param::minCornerness;
-	cfg.nLevels = Param::nLevels;
-	cfg.windowWidth = Param::windowWidth;
-	cfg.convergenceThreshold = Param::convergeThreshold;
-	cfg.SSD_Threshold = Param::SSD_Threshold;
-	cfg.trackWithGain = Param::trackWithGain;
+	cfg.minCornerness = SLAMParam::minCornerness;
+	cfg.nLevels = SLAMParam::nLevels;
+	cfg.windowWidth = SLAMParam::windowWidth;
+	cfg.convergenceThreshold = SLAMParam::convergeThreshold;
+	cfg.SSD_Threshold = SLAMParam::SSD_Threshold;
+	cfg.trackWithGain = SLAMParam::trackWithGain;
 
 	m_tracker.init(camId, W, H, &cfg);
 	m_tracker.setIntrinsicParam(K, iK, k_ud,k_c.data);
@@ -647,9 +647,9 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 	int num = getStaticMappedTrackNodes(nodes);
 	int featNum = m_tracker.trackedFeatureNum_;
 
-	if ( num < std::min(Param::minMappedRatio * featNum, (float)5) ){
+	if ( num < std::min(SLAMParam::minMappedRatio * featNum, (float)5) ){
 		printf("num of mapped feature points (%d) < ratio (%f) * feature number (%d)\n",
-					num, Param::minMappedRatio, featNum);
+					num, SLAMParam::minMappedRatio, featNum);
 		//MyApp::coSLAM.pause();
 		return false;
 	}
@@ -686,7 +686,7 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 
 	IntraCamPoseOption opt;
 	intraCamEstimate(K.data, cR, cT, Ms.rows, 0, Ms.data, ms.data,
-			Param::maxErr, R, t, &opt);
+			SLAMParam::maxErr, R, t, &opt);
 
 	Mat_d new_errs(n3D2Ds, 1);
 	for (int i = 0; i < n3D2Ds; i++) {
@@ -939,7 +939,7 @@ int SingleSLAM::getUnMappedAndTrackedCorrespondence(int f1, int f2,
 int SingleSLAM::newMapPoints(std::vector<MapPoint*>& mapPts, double maxEpiErr,
 		double maxNcc) {
 	std::vector<FeaturePoint*> vecFeatPts;
-	getUnMappedAndTrackedFeatPts(vecFeatPts, 0, Param::nMinFeatTrkLen);
+	getUnMappedAndTrackedFeatPts(vecFeatPts, 0, SLAMParam::nMinFeatTrkLen);
 
 	mapPts.clear();
 	mapPts.reserve(4096);

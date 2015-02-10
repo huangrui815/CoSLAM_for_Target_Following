@@ -124,7 +124,8 @@ bool usbCamMain() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			coSLAM.genNewMapPoints();
+			bool merge = false;
+			coSLAM.genNewMapPoints(merge);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
 
 			for (int i = 0; i < coSLAM.numCams; i++){

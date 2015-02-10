@@ -28,12 +28,15 @@ public:
 	PosVelKF();
 	~PosVelKF();
 
-	bool predict(double curr_ts);
+	bool predict(cv::Mat& meas,double curr_ts);
 	void update(cv::Mat& meas, double curr_ts);
+	void updatePos(cv::Mat& meas, double curr_ts, float R);
+
 	void setStartTs(double ts);
 
 	double getPos();
 	double getVel();
+	double getPredPos(double ts);
 };
 
 

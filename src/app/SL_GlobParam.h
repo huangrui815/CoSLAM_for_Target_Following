@@ -11,7 +11,7 @@
 #include <vector>
 using namespace std;
 //#define DEBUG_MODE 0
-class Param {
+class SLAMParam {
 public:
 	/* number of cameras*/
 	static int nCam;

@@ -52,27 +52,27 @@ protected:
 	// Virtual event handlers, overide them in your derived class
 	virtual void OnSelectVideo(wxFileDirPickerEvent& event) {
 		wxString wxstr = m_filePickerVideo->GetPath();
-		Param::videoFilePath.resize(1);
-		Param::videoFilePath[0] = wxstr.ToStdString();
+		SLAMParam::videoFilePath.resize(1);
+		SLAMParam::videoFilePath[0] = wxstr.ToStdString();
 		event.Skip();
 	}
 	virtual void OnSelectCal(wxFileDirPickerEvent& event) {
 		wxString wxstr = m_filePickerCal->GetPath();
-		Param::camFilePath.resize(1);
-		Param::camFilePath[0] = wxstr.ToStdString();
+		SLAMParam::camFilePath.resize(1);
+		SLAMParam::camFilePath[0] = wxstr.ToStdString();
 		event.Skip();
 	}
 	virtual void OnStart(wxCommandEvent& event) {
-		if (Param::videoFilePath.empty()
-				|| Param::videoFilePath[0] == "") {
+		if (SLAMParam::videoFilePath.empty()
+				|| SLAMParam::videoFilePath[0] == "") {
 			wxMessageBox("Please select video file!");
 			return;
 		}
-		if (Param::camFilePath.empty()) {
+		if (SLAMParam::camFilePath.empty()) {
 			wxString wxstr = m_filePickerCal->GetPath();
-			Param::camFilePath.resize(1);
-			Param::camFilePath[0] = wxstr.ToStdString();
-			if (Param::camFilePath[0] == "") {
+			SLAMParam::camFilePath.resize(1);
+			SLAMParam::camFilePath[0] = wxstr.ToStdString();
+			if (SLAMParam::camFilePath[0] == "") {
 				wxMessageBox("Please select calibration file!");
 				return;
 			}

@@ -153,13 +153,13 @@ MainDlg::MainDlg(wxWindow* parent, wxWindowID id, const wxString& title,
 
 	//update the paramter value
 	ostream outStartFrm(m_textStartFrm);
-	outStartFrm << Param::nSkipFrame;
+	outStartFrm << SLAMParam::nSkipFrame;
 	ostream outInitFrm(m_textInitFrm);
-	outInitFrm << Param::nInitFrame;
+	outInitFrm << SLAMParam::nInitFrame;
 	ostream outKLTThres(m_textKLTThres);
-	outKLTThres << Param::SSD_Threshold;
+	outKLTThres << SLAMParam::SSD_Threshold;
 	ostream outMinCorner(m_textMinCornerness);
-	outMinCorner << Param::minCornerness;
+	outMinCorner << SLAMParam::minCornerness;
 
 }
 
