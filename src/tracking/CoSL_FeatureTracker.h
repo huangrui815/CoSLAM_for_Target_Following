@@ -125,6 +125,7 @@ public:
 	int getNumOfFeatPts(){
 		return trackedFeatureNum_ + detectedFeatureNum_;
 	}
+	int getNumDynamicFeats();
 	bool readFMatrix(string path);
 	bool readFMatrix01(string path);
 };

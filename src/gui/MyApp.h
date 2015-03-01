@@ -77,6 +77,7 @@ public:
 	sub_ar_marker_pose[SLAM_MAX_NUM];
 //	ros::Subscriber sub_features[SLAM_MAX_NUM];
 	static ros::Publisher pub_features[SLAM_MAX_NUM];
+	image_transport::Subscriber sub[SLAM_MAX_NUM];
 
 //	typedef message_filters::sync_policies::ApproximateTime<
 //		sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> videoSyncPolicy;
@@ -127,15 +128,22 @@ public:
 	void subCB_2_marker_pose(const ar_track_alvar_msgs::AlvarMarkersConstPtr &pose0,
 			const ar_track_alvar_msgs::AlvarMarkersConstPtr &pose1);
 
+	static void subCB_video01(const sensor_msgs::ImageConstPtr &img);
+	static void subCB_video02(const sensor_msgs::ImageConstPtr &img);
+
 
 	// Create redis clients to send command
 	static CBRedisClient* redis[SLAM_MAX_NUM];
 	static CBRedisClient* redis_start;
 	static CBRedisClient* redis_vel;
+	static CBRedisClient* redis_dynObj;
 
 	static PosVelKF posVelKF[SLAM_MAX_NUM][3];
 	static bool usingKF;
+	static bool _mergeable;
+	static bool _imgAvailableForMerge;
 
+	static bool _imgReady[SLAM_MAX_NUM];
 	static int _numMarkers;
 
 	static vector<double> rosTime_whole;

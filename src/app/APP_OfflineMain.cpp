@@ -99,14 +99,13 @@ bool offlineMain() {
 		}
 
 		vector<double> tmStepVec;
+		MyApp::bStop = true;
+		for (int i = 0; i < endFrame && !MyApp::bExit; i++) {
 
-		for (int i = 0; i < endFrame; i++) {
-
-//			MyApp::bStop = true;
 //				redrawAllViews();
-//				while (MyApp::bStop) {
-//					Sleep(50);
-//				};
+				while (MyApp::bStop) {
+					Sleep(50);
+				};
 			TimeMeasurer tmPerStep;
 			tmPerStep.tic();
 
@@ -125,7 +124,7 @@ bool offlineMain() {
 			bool merge = false;
 			coSLAM.genNewMapPoints(merge);
 			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
-			cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
+			//cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
 
 			//point registration
 			coSLAM.currentMapPointsRegister(Const::PIXEL_ERR_VAR,
@@ -133,12 +132,26 @@ bool offlineMain() {
 
 			coSLAM.storeDynamicPoints();
 
+			if (coSLAM.dynObjPresent){
+				for (int i=0; i < coSLAM.numCams; i++){
+					coSLAM.slam[i].m_camPos.current()->setDynPos(coSLAM.dynObjPos);
+					printf("dynObjPos: %lf %lf %lf\n", coSLAM.dynObjPos[0], coSLAM.dynObjPos[1], coSLAM.dynObjPos[2]);
+					double targetPos[3];
+					coSLAM.transformTargetPos2Global(coSLAM.dynObjPos, targetPos);
+					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+					double theta = atan2(coSLAM.slam[i]._targetPosInCam[0], coSLAM.slam[i]._targetPosInCam[2]);
+					double H = targetPos[2] * 2;
+					double Z = coSLAM.slam[i]._targetPosInCam[2];
+					printf("cam: %d, theta: %lf, H: %lf, Z: %lf\n", i, theta * 180 / 3.1415926, H, Z);
+				}
+			}
+
 			updateDisplayData();
 			redrawAllViews();
 
 			coSLAM.m_tmPerStep = tmPerStep.toc();
 			tmStepVec.push_back(coSLAM.m_tmPerStep);
-			Sleep(50);
+			Sleep(100);
 
 			if (i % 500 == 0) {
 				//coSLAM.releaseFeatPts(coSLAM.curFrame - 500);

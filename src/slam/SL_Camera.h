@@ -16,11 +16,14 @@ public:
 	double R[9]; //rotation
 	double t[3]; //translation
 	double ts; // time stamp
+	double currDynPos[3];
+	bool dynObjPresent;
 public:
 	CamPose();
 	CamPose(const double* R_, const double* t_);
 	CamPose(const CamPose& other);
 	CamPose& operator =(const CamPose& other);
+	void setDynPos(double pos[3]);
 };
 
 class CamPoseItem: public CamPose {

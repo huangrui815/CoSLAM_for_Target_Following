@@ -11,12 +11,16 @@
 
 CamPose::CamPose() :
 		f(-1), camId(-1) {
-
+	dynObjPresent = false;
+	currDynPos[0] = 0;
+	currDynPos[1] = 0;
+	currDynPos[2] = 0;
 }
 CamPose::CamPose(const double* R_, const double* t_) :
 		f(-1), camId(-1) {
 	memcpy(R, R_, sizeof(double) * 9);
 	memcpy(t, t_, sizeof(double) * 3);
+	dynObjPresent = false;
 }
 CamPose::CamPose(const CamPose& other) {
 	operator =(other);
@@ -27,9 +31,18 @@ CamPose& CamPose::operator =(const CamPose& other) {
 		camId = other.camId;
 		memcpy(R, other.R, sizeof(double) * 9);
 		memcpy(t, other.t, sizeof(double) * 3);
+		dynObjPresent = other.dynObjPresent;
 	}
 	return *this;
 }
+
+void CamPose::setDynPos(double* pos){
+	currDynPos[0] = pos[0];
+	currDynPos[1] = pos[1];
+	currDynPos[2] = pos[2];
+	dynObjPresent = true;
+}
+
 CamPoseItem::CamPoseItem() :
 		CamPose(), pre(0), next(0) {
 }

@@ -36,8 +36,11 @@ public:
 //		nRowBlk = 9;
 //		nColBlk = 16;
 		//640x480
-		nRowBlk = 12;
-		nColBlk = 16;
+//		nRowBlk = 12;
+//		nColBlk = 16;
+		//768x480
+		nRowBlk = 15;
+		nColBlk = 24;
 	}
 };
 class SingleSLAM: public SingleSLAMParam {
@@ -88,6 +91,10 @@ public:
 		return m_tracker.currentFrame();
 	}
 	void propagateFeatureStates();
+
+	double _targetPosInCam[3];
+	void projectTargetToCam(CamPoseItem* cam, double targetPos[3]);
+
 public:
 	int getStaticMappedTrackNodes(std::vector<Track2DNode*>& nodes);
 	int getUnMappedTrackNodes(std::vector<Track2DNode*>& nodes, int minLen);

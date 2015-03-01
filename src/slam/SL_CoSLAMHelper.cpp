@@ -107,7 +107,7 @@ int isStaticRemovable(int numCams, MapPoint* p, double pixelVar, double M[3],
 //		return maxI;
 //	}
 
-	if (nVis > 2
+	if (nVis >= 2
 			&& isStaticPointExclude(numCams, p, pixelVar, M, cov, maxI,
 					numFrame)) {
 		return maxI;

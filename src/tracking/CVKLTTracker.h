@@ -6,7 +6,7 @@
 
 typedef float slfloat;
 using namespace std;
-#define KLT_MAX_FEATURE_NUM 512
+#define KLT_MAX_FEATURE_NUM 750
 
 class CVKLTTracker : public BaseKLTTracker{
 public:
@@ -31,12 +31,17 @@ public:
 	Mat_i _flag, _flagBackup, _flagMapped;
 	int _numMappedTracks;
 
+	int _numDynamicFeatPts;
+
 	AVIReader aviReader;
 
 	bool _bLost;
 	int _recoverFrmNum;
 
+	cv::Ptr<cv::FeatureDetector> _goodFeatdetector;
 	cv::Ptr<cv::FeatureDetector> _detector;
+	cv::Ptr<cv::DescriptorExtractor> _extractor;
+	cv::Mat _desc;
 
 	class DetectionParam
 	{

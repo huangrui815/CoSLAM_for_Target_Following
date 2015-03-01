@@ -56,6 +56,7 @@ public:
 public:
 	//to store dynamic points
 	vector<vector<Point3dId> > m_dynPts;
+	vector<cv::Point3f> m_dynPtsCenter;
 	//for camera grouping
 	double viewOverlapCost[SLAM_MAX_NUM * SLAM_MAX_NUM];
 	//store the shared feature points
@@ -133,6 +134,10 @@ public:
 
 	//for relocalization
 	int _frmNumAfterReloc;
+
+	double dynObjPos[3];
+	double dynObjPosVar[3];
+	bool dynObjPresent;
 public:
 	void processOneFrame();
 public:
@@ -160,6 +165,7 @@ public:
 			double R[9], double t[3]);
 	double calibScale(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB);
 	bool transformCamPose2Global(CamPoseItem* cam, double P_global[3], double rpy[3]);
+	void transformTargetPos2Global(double target_cam[3], double target_global[3]);
 
 	/*feature tracking*/
 	void featureTracking();
@@ -184,6 +190,7 @@ public:
 	KeyFrame* addKeyFrame(int readyForKeyFrame[SLAM_MAX_NUM]);
 	/*generate new map points*/
 	int genNewMapPoints(bool& merged);
+	int genNewMapPoints_new();
 	int genNewMapPointsInterCam(bool bUseSURF);
 
 	/*camera grouping*/
@@ -194,6 +201,9 @@ public:
 	/* merge camera groups if the cameras from different group merge */
 	std::deque<MergeCameraGroup*> m_requestMCGs;
 	bool mergeCamGroups(KeyFrame* newFrame);
+	bool mergeCamGroupsNeeded(KeyFrame* newFrame);
+	bool mergeCamGroups_new(KeyFrame* newFrame);
+
 
 	/*key frame matching & bundle adjustment*/
 	std::deque<RobustBundleRTS*> m_requestBAs;
@@ -256,7 +266,11 @@ public:
 	/* adjust current camera poses*/
 	void adjustCurrentCamPoses();
 	/* store the dynamic points*/
+	double prevPose[3];
+	bool prevPoseSet;
 	void storeDynamicPoints();
+	void getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
+			vector<vector<Point3dId> >& dynTracks, int trjLen);
 
 	int getCurFrameInVideo(int c) const {
 		return slam[c].startFrameInVideo + curFrame + 1;

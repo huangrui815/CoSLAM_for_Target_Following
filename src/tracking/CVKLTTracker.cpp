@@ -14,13 +14,17 @@ CVKLTTracker::CVKLTTracker(){
 	_bLost = false;
 	_recoverFrmNum = 0;
 	_trackingDistanceConstraint = 40 *40;
+
+	_numDynamicFeatPts = 0;
 									//30 * 30; //for tsing hua videos (752 x 480)
 	                             // 400; for ardrone video (630 x 360)
-		_detector = new cv::BRISK();
-	//	_detector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 20, 3, 0, 0.04);
-//		_detector = new cv::FastFeatureDetector(30, true);
+//		_detector = new cv::BRISK();
+//		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(512, 0.01, 30, 3, 0, 0.04);
+		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 30, 3, 0, 0.04);
+		_detector = new cv::FastFeatureDetector(30, true);
 //		_detector = new cv::StarFeatureDetector();
 //	_detector = new cv::OrbFeatureDetector(KLT_MAX_FEATURE_NUM);
+		_extractor = new BriefDescriptorExtractor;
 }
 CVKLTTracker::~CVKLTTracker() {
 
@@ -46,7 +50,7 @@ void CVKLTTracker::_genPointMask(ImgG& mask) {
 		if (_flag[i] >= 0) {
 			cv::circle(cvMask,
 					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
-					20, cv::Scalar(0), -1);
+					25, cv::Scalar(0), -1);
 		}
 	}
 }
@@ -109,8 +113,21 @@ void CVKLTTracker::detect(const ImgG& img) {
 	const int MAX_COUNT = KLT_MAX_FEATURE_NUM;
 	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
 	Size subPixWinSize(10,10), winSize(31,31);
-	goodFeaturesToTrack(gray, points[1], MAX_COUNT, 0.01, 10, _detectMask, 3, 0, 0.04);
+
+	vector<KeyPoint> keypoints;
+//	goodFeaturesToTrack(gray, points[1], MAX_COUNT, 0.01, 25, _detectMask, 3, 0, 0.04);
+//	cornerSubPix(gray, points[1], subPixWinSize, Size(-1,-1), termcrit);
+
+//	goodFeaturesToTrack(gray, keypoints, MAX_COUNT, 0.01, 25, _detectMask, 3, 0, 0.04);
+	_goodFeatdetector->detect(gray, keypoints, _detectMask);
+//	_detector->detect(gray, keypoints);
+
+	for (int i = 0; i < keypoints.size(); i++){
+		points[1].push_back(cv::Point2f(keypoints[i].pt.x, keypoints[i].pt.y));
+	}
 	cornerSubPix(gray, points[1], subPixWinSize, Size(-1,-1), termcrit);
+
+	_extractor->compute(gray, keypoints, _desc);
 
 //	Mat cvImg(_img2.m, _img2.n, CV_8UC1, _img2.data);
 //	vector<KeyPoint> keyPts;
@@ -168,7 +185,7 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		gray.copyTo(prevGray);
 
 	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-	Size subPixWinSize(10,10), winSize(20,20);
+	Size subPixWinSize(10,10), winSize(31,31);
 	calcOpticalFlowPyrLK(prevGray, gray, points[0], points[1], status, err, winSize,
 										 3, termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS, 1e-4);
 
@@ -425,12 +442,15 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 
 	vector<KeyPoint> keyPts;
 	Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
-	_detector->detect(gray, keyPts, cvMask);
+	_goodFeatdetector->detect(gray, keyPts, cvMask);
 
     //
 	int nptsnew = (int) keyPts.size();
 	if (nptsnew + nTracked >= KLT_MAX_FEATURE_NUM)
 		nptsnew = KLT_MAX_FEATURE_NUM - nTracked;
+//	if (nptsnew + nTracked >= 512 + _numDynamicFeatPts)
+//		nptsnew = 512 + _numDynamicFeatPts - nTracked;
+
 
 	points[1].resize(nTracked + nptsnew);
 	pts2trackId.resize(nTracked + nptsnew);

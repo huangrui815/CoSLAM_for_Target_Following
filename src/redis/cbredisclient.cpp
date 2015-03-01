@@ -27,6 +27,33 @@ bool CBRedisClient::setPose(double ts, double ts_now, double x, double x_vel, do
   return res;
 }
 
+bool CBRedisClient::setPoseTarget(double ts, int present, double theta, double robot_x, double robot_y, double robot_yaw, double target_x, double target_y,
+		double H){
+	  bool res;
+	  redisReply* reply = (redisReply*) redisCommand(mRedis, "SET %s %f:%d:%f:%f:%f:%f:%f:%f:%f:%f",
+			  mName.c_str(), ts, present, theta, robot_x, robot_y, robot_yaw, target_x, target_y, H, ts);
+	  if (reply && strcmp(reply->str, "OK") == 0)
+	    res = true; // success
+	  else
+	    res = false;
+
+	  freeReplyObject(reply);
+	  return res;
+}
+
+bool CBRedisClient::setDynObj(double x, double y, double z){
+  bool res;
+  redisReply* reply = (redisReply*) redisCommand(mRedis, "SET %s %f:%f:%f",
+		  mName.c_str(), x,y,z);
+  if (reply && strcmp(reply->str, "OK") == 0)
+	res = true; // success
+  else
+	res = false;
+
+  freeReplyObject(reply);
+  return res;
+}
+
 bool CBRedisClient::setCommand(std::string command) {
   bool res;
   redisReply* reply = (redisReply*) redisCommand(mRedis, "SET %s %s", mName.c_str(), command.c_str());

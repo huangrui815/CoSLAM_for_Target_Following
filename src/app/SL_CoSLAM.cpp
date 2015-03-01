@@ -50,6 +50,11 @@ CoSLAM::CoSLAM() :
 	CoSLAM::ptr = this;
 	for (int i = 0; i < SLAM_MAX_NUM; i++)
 		state[i] = SLAM_STATE_READY;
+
+	scale_global2Cam = 1;
+	dynObjPos[0] = dynObjPos[1] = dynObjPos[2] = 0;
+	dynObjPresent = false;
+	prevPoseSet = false;
 }
 CoSLAM::~CoSLAM() {
 	//clear the queued BAs
@@ -170,12 +175,12 @@ bool CoSLAM::virtualReadFrame() {
 	tm.tic();
 
 	for (int i = 0; i < numCams; i++){
-		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
-		cv::Mat img, gray;
-		MyApp::_cap[i] >> img;
-		cvtColor(img, gray, CV_BGR2GRAY);
+//		MyApp::_cap[i].set(CV_CAP_PROP_POS_FRAMES, _frameId[i]);
+//		cv::Mat img, gray;
+//		MyApp::_cap[i] >> img;
+//		cvtColor(img, gray, CV_BGR2GRAY);
 //		memcpy(slam[i].m_rgb.data, img.data, img.cols * img.rows *3);
-		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
+//		memcpy(slam[i].m_img_draw.data, gray.data, img.cols * img.rows);
 //		cv::Mat cvImg(slam[i].m_img.rows, slam[i].m_img.cols, CV_8UC1, slam[i].m_img.data);
 //		cv::Mat cvSmallImg(slam[i].m_smallImg.rows, slam[i].m_smallImg.cols, CV_8UC1,
 //				slam[i].m_smallImg.data);
@@ -184,7 +189,7 @@ bool CoSLAM::virtualReadFrame() {
 
 	curFrame++;
 	m_tmReadFrame = tm.toc();
-	ROS_INFO("VirtualReadFrame completed\n");
+//	ROS_INFO("VirtualReadFrame completed\n");
 	return true;
 }
 
@@ -431,6 +436,10 @@ bool CoSLAM::calibGlobal2Cam(){
 			nms[2*j] = poses.pose.position.x / poses.pose.position.z;
 			nms[2*j + 1] = poses.pose.position.y / poses.pose.position.z;
 			CamPoseItem* cam = slam[j].m_camPos.current();
+			printf("cam %d: R: %lf %lf %lf %lf %lf %lf %lf %lf %lf\n", j, cam->R[0], cam->R[1], cam->R[2],
+					cam->R[3], cam->R[4], cam->R[5], cam->R[6], cam->R[7], cam->R[8]);
+			printf("t: %lf %lf %lf\n", cam->t[0], cam->t[1], cam->t[2]);
+
 			memcpy(Ks.data + 9 * j, slam[j].K.data, sizeof(double) * 9);
 			memcpy(Rs.data + 9 * j, cam->R, sizeof(double) * 9);
 			memcpy(Ts.data + 3 * j, cam->t, sizeof(double) * 3);
@@ -442,7 +451,7 @@ bool CoSLAM::calibGlobal2Cam(){
 		double M[3];
 		triangulateMultiView(numCams, Rs.data, Ts.data, nms.data, M);
 		marker_poses_cam.push_back(cv::Point3f(M[0], M[1], M[2]));
-		printf("C: %lf %lf %lf\n", M[0], M[1], M[2]);
+		printf("M[3]: %lf %lf %lf\n", M[0], M[1], M[2]);
 		cout << "i: " << i <<endl;
 		cout << "size: " << MyApp::markerList[0].back().markers.size() << endl;
 
@@ -455,8 +464,12 @@ bool CoSLAM::calibGlobal2Cam(){
 	}
 
 	scale_global2Cam = calibScale(marker_poses_global, marker_poses_cam);
+	printf("scale_global2Cam: %lf\n", scale_global2Cam);
 	for (int i = 0; i < marker_poses_cam.size(); i++){
 		printf("%lf %lf %lf\n", marker_poses_cam[i].x, marker_poses_cam[i].y, marker_poses_cam[i].z);
+	}
+	for (int i = 0; i < marker_poses_global.size(); i++){
+		printf("%lf %lf %lf\n", marker_poses_global[i].x, marker_poses_global[i].y, marker_poses_global[i].z);
 	}
 	rigidTransformEsti(marker_poses_cam, marker_poses_global, R_global2Cam, t_global2Cam);
 //	fprintf(fid, "scale: %lf\n", scale_global2Cam);
@@ -509,6 +522,20 @@ bool CoSLAM::transformCamPose2Global(CamPoseItem* cam, double P_global[3], doubl
 	return true;
 }
 
+void CoSLAM::transformTargetPos2Global(double target_cam[3], double target_global[3]){
+	double R[9], t[3];
+	memcpy(R, R_global2Cam, 9 * sizeof(double));
+	memcpy(t, t_global2Cam, 3 * sizeof(double));
+
+	target_cam[0] *= scale_global2Cam;
+	target_cam[1] *= scale_global2Cam;
+	target_cam[2] *= scale_global2Cam;
+
+	target_global[0] = R[0] * target_cam[0] + R[1] * target_cam[1] + R[2] * target_cam[2] + t[0];
+	target_global[1] = R[3] * target_cam[0] + R[4] * target_cam[1] + R[5] * target_cam[2] + t[1];
+	target_global[2] = R[6] * target_cam[0] + R[7] * target_cam[1] + R[8] * target_cam[2] + t[2];
+}
+
 double CoSLAM::calibScale(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& ptsB){
 	int nPts = ptsA.size();
 	int m = nPts * (nPts - 1) / 2;
@@ -542,12 +569,12 @@ bool CoSLAM::rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& 
 	int numPts = ptsA.size();
 	for (int i = 0; i< ptsA.size(); i++){
 		centroid_A.at<float>(0,0) += ptsA[i].x;
-		centroid_A.at<float>(0,1) += ptsA[i].y;
-		centroid_A.at<float>(0,2) += ptsA[i].z;
+		centroid_A.at<float>(1,0) += ptsA[i].y;
+		centroid_A.at<float>(2,0) += ptsA[i].z;
 
 		centroid_B.at<float>(0,0) += ptsB[i].x;
-		centroid_B.at<float>(0,1) += ptsB[i].y;
-		centroid_B.at<float>(0,2) += ptsB[i].z;
+		centroid_B.at<float>(1,0) += ptsB[i].y;
+		centroid_B.at<float>(2,0) += ptsB[i].z;
 	}
 	centroid_A = centroid_A / numPts;
 	centroid_B = centroid_B / numPts;
@@ -557,21 +584,30 @@ bool CoSLAM::rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& 
 
 	//Compute H
 	float H_data[9];
+	cout << "H_data: " << endl;
+	for (int i = 0; i < 9; i++){
+		H_data[i] = 0;
+		cout << H_data[i] << endl;
+	}
+	cout << "numPts " << numPts << endl;
+
 	for (int i = 0; i < numPts; i++){
 		H_data[0] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].x - centroid_B.at<float>(0,0));
-		H_data[1] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].y - centroid_B.at<float>(0,1));
-		H_data[2] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+		H_data[1] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].y - centroid_B.at<float>(1,0));
+		H_data[2] += (ptsA[i].x - centroid_A.at<float>(0,0)) * (ptsB[i].z - centroid_B.at<float>(2,0));
 
-		H_data[3] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].x - centroid_B.at<float>(0,0));
-		H_data[4] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].y - centroid_B.at<float>(0,1));
-		H_data[5] += (ptsA[i].y - centroid_A.at<float>(0,1)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+		H_data[3] += (ptsA[i].y - centroid_A.at<float>(1,0)) * (ptsB[i].x - centroid_B.at<float>(0,0));
+		H_data[4] += (ptsA[i].y - centroid_A.at<float>(1,0)) * (ptsB[i].y - centroid_B.at<float>(1,0));
+		H_data[5] += (ptsA[i].y - centroid_A.at<float>(1,0)) * (ptsB[i].z - centroid_B.at<float>(2,0));
 
-		H_data[6] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].x - centroid_B.at<float>(0,0));
-		H_data[7] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].y - centroid_B.at<float>(0,1));
-		H_data[8] += (ptsA[i].z - centroid_A.at<float>(0,2)) * (ptsB[i].z - centroid_B.at<float>(0,2));
+		H_data[6] += (ptsA[i].z - centroid_A.at<float>(2,0)) * (ptsB[i].x - centroid_B.at<float>(0,0));
+		H_data[7] += (ptsA[i].z - centroid_A.at<float>(2,0)) * (ptsB[i].y - centroid_B.at<float>(1,0));
+		H_data[8] += (ptsA[i].z - centroid_A.at<float>(2,0)) * (ptsB[i].z - centroid_B.at<float>(2,0));
 	}
 
 	cv::Mat H(3,3, CV_32F, H_data);
+	cout << "H " << H << endl;
+
 	cv::Mat w, u, vt;
 	cv::SVD::compute(H, w, u, vt);
 	cv::Mat ut, v;
@@ -584,14 +620,15 @@ bool CoSLAM::rigidTransformEsti(vector<cv::Point3f>& ptsA, vector<cv::Point3f>& 
 		v.at<float>(2,2) = v.at<float>(2,2) * -1;
 		ret_R = v * ut;
 	}
+	cout << "ret_R" << ret_R <<endl;
 	cv::Mat ret_t = ret_R * centroid_A * -1 + centroid_B;
 
-	cout << "ret_R" << ret_R <<endl;
 	cout << "ret_t" << ret_t << endl;
 
 	for (int i = 0; i < 3; i++){
 		for (int j = 0; j < 3; j++){
 			R[i *3 + j] = ret_R.at<float>(i,j);
+			cout << "R[" << i *3 + j << "] " << R[i *3 + j] <<endl;
 		}
 		t[i] = ret_t.at<float>(i,0);
 	}
@@ -621,7 +658,7 @@ void CoSLAM::featureReceiving() {
 		uchar* smallImg = (uchar*)MyApp::featuresList[i].back().smallImg.data();
 		slam[i].receiveFeaturePoints(ts, featureId, fts, smallImg);
 		_frameId[i] = MyApp::featuresList[i].back().frameId;
-		ROS_INFO("Receive frame id: %d\n", _frameId[i]);
+//		ROS_INFO("Receive frame id: %d\n", _frameId[i]);
 	}
 	pthread_mutex_unlock(&MyApp::_mutexFeatures);
 	m_tmFeatureTracking = tm.toc();
@@ -739,7 +776,7 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 
 	enterBACriticalSection();
 //	mapPointsClassify(12.0);
-	mapPointsClassify(3.0);
+	mapPointsClassify(10.0);
 	leaveBACriticalSection();
 	m_tmMapClassify = tm.toc();
 }
@@ -801,7 +838,7 @@ void CoSLAM::mapPointsClassify(double pixelVar) {
 
 	const int FRAME_NUM_FOR_NEWPOINT = 30;
 	const int FRAME_NUM_FOR_DONTMOVE = 50;
-	const int NUM_FRAME_CHECK_STATIC = 60;
+	const int NUM_FRAME_CHECK_STATIC = 40;
 
 	int numFalse = 0;
 	for (MapPoint* p = pCurMapHead; p; p = p->next) {
@@ -1687,8 +1724,8 @@ void CoSLAM::mapStateUpdate() {
 			}
 		}
 	}
-	printf("mapStateUpdate: curMapPts (%d), actMapPts (%d), iactMapPts (%d)\n",
-			curMapPts.getNum(), actMapPts.getNum(), iactMapPts.getNum());
+//	printf("mapStateUpdate: curMapPts (%d), actMapPts (%d), iactMapPts (%d)\n",
+//			curMapPts.getNum(), actMapPts.getNum(), iactMapPts.getNum());
 
 	MapPoint* pActMapHead = actMapPts.getHead();
 	if (!pActMapHead)
@@ -1715,8 +1752,8 @@ void CoSLAM::mapStateUpdate() {
 	assert(actMapPts.getNum() == actMapPts.count());
 	assert(iactMapPts.getNum() == iactMapPts.count());
 
-	printf("mapStateUpdate: curMapPts (%d), actMapPts (%d), iactMapPts (%d)\n",
-			curMapPts.getNum(), actMapPts.getNum(), iactMapPts.getNum());
+//	printf("mapStateUpdate: curMapPts (%d), actMapPts (%d), iactMapPts (%d)\n",
+//			curMapPts.getNum(), actMapPts.getNum(), iactMapPts.getNum());
 
 }
 void CoSLAM::getCurMapCenterViewFrom(int camId, double center[3]) {
@@ -1754,7 +1791,7 @@ bool CoSLAM::IsMappedPtsDecreaseBelow(int camId, double ratio) {
 	int lastFrame = slam[camId].m_keyPose.tail->frame;
 
 	for (const FeaturePoint* fp = pHead; fp && fp != pTail; fp = fp->next) {
-		if (fp->mpt && fp->mpt->firstFrame <= lastFrame)
+		if (fp->mpt && fp->mpt->firstFrame <= lastFrame && fp->mpt->isCertainStatic())
 			num++;
 	}
 	//test
@@ -1845,6 +1882,114 @@ int CoSLAM::genNewMapPoints(bool& merged) {
 				merged = mergeCamGroups(pKeyFrame);
 
 			//send a request for calling bundle adjustment	
+			//for less than 4 cameras
+			//requestForBA(15, 2, 2, 30);
+
+			//for more than 4 cameras
+			if (curFrame > m_lastFrmGroupMerge + 2) {
+				requestForBA(5, 2, 2, 30);
+			}
+
+			for (int i = 0; i < numCams; i++) {
+				if (readyForKeyFrame[i] == READY_FOR_KEY_FRAME_DECREASE
+						&& numCams > 1) {
+					enterBACriticalSection();
+					vector<MapPoint*> newMapPts;
+					int iNum = slam[i].newMapPoints(newMapPts);
+//					//test
+//					logInfo("%d new map points are generated at %d!\n", iNum,
+//							i);
+					num += iNum;
+					m_lastFrmIntraMapping = curFrame;
+					for (size_t k = 0; k < newMapPts.size(); k++) {
+						curMapPts.add(newMapPts[k]);
+					}
+					leaveBACriticalSection();
+				}
+			}
+		}
+	}
+
+//	if (curFrame % 280 == 0) {
+////		pause();
+//		KeyFrame* pKeyFrame = addKeyFrame(readyForKeyFrame);
+//		//reset the pointers to previous feature points to those on the previous key frame.
+//		//resetPrevFeaturePoints(pKeyFrame);
+//		//check if there are camera groups that can be merged
+//		if (m_groupNum > 1)
+//			mergeCamGroups(pKeyFrame);
+//	}
+
+	if (numCams == 1)
+		return num;
+
+	if (decrease || curFrame - m_lastFrmInterMapping > 3) {
+		num += genNewMapPointsInterCam(false);
+		m_lastFrmInterMapping = curFrame;
+		logInfo("curFrame:%d, m_lastFrmInterMapping:%d, %d new points\n",
+				curFrame, m_lastFrmInterMapping, num);
+		//pause();
+	}
+	return num;
+}
+
+int CoSLAM::genNewMapPoints_new() {
+	if (!allCamerasNormal())
+		return -1;
+
+	int num = 0;
+	getNumDynamicStaticPoints();
+
+	//check if there is one camera ready for insert a new key frame
+	int readyForKeyFrame[SLAM_MAX_NUM];
+	int nReady = 0;
+	bool decrease = false;
+	for (int i = 0; i < numCams; i++) {
+		slam[i].getNumMappedStaticPts();
+		readyForKeyFrame[i] = IsReadyForKeyFrame(i);
+		if (readyForKeyFrame[i] > 0)
+			nReady++;
+		if (readyForKeyFrame[i] == READY_FOR_KEY_FRAME_DECREASE)
+			decrease = true;
+	}
+	if (nReady > 0 || MyApp::_mergeable) {
+		for (int i = 0; i < numCams; i++) {
+			if ((readyForKeyFrame[i] > 1 && numCams > 1)
+					|| (readyForKeyFrame[i] > 0 && numCams == 1)) {
+				if (m_groupId[i] == m_mergedgid
+						&& curFrame > m_lastFrmGroupMerge
+						&& curFrame < m_lastFrmGroupMerge + 130)
+					continue;
+				enterBACriticalSection();
+				vector<MapPoint*> newMapPts;
+				int iNum = slam[i].newMapPoints(newMapPts);
+				num += iNum;
+				m_lastFrmIntraMapping = curFrame;
+				for (size_t k = 0; k < newMapPts.size(); k++) {
+					curMapPts.add(newMapPts[k]);
+				}
+				leaveBACriticalSection();
+
+			}
+		}
+
+		if (decrease || MyApp::_mergeable) {
+			//for bundle adjsutment and group merging
+			//add a new key frame
+			KeyFrame* pKeyFrame = addKeyFrame(readyForKeyFrame);
+
+			//reset the pointers to previous feature points to those on the previous key frame.
+			//resetPrevFeaturePoints(pKeyFrame);
+
+			//check if there are camera groups that can be merged
+			if (m_groupNum > 1){
+				if (!MyApp::_mergeable)
+					MyApp::_mergeable = mergeCamGroupsNeeded(pKeyFrame);
+				else if (MyApp::_imgAvailableForMerge)
+					mergeCamGroups(pKeyFrame);
+			}
+
+			//send a request for calling bundle adjustment
 			//for less than 4 cameras
 			//requestForBA(15, 2, 2, 30);
 
@@ -2079,6 +2224,115 @@ bool CoSLAM::mergeCamGroups(KeyFrame* newFrame) {
 	}
 	return false;
 }
+
+bool CoSLAM::mergeCamGroupsNeeded(KeyFrame* newFrame) {
+	MergeCameraGroup mcg;
+	mcg.setCurrentFrame(newFrame);
+	for (int i = 0; i < numCams; i++)
+		mcg.setImageSize(i, slam[i].m_img.w, slam[i].m_img.h);
+
+	// Commented by Rui
+//	if( curFrame < 5600 && curFrame < m_lastFrmGroupMerge + 130)
+//		return false;
+
+//	if (((curFrame > 1475 && curFrame < 1530)
+//			|| (curFrame > 1758 && curFrame < 1850)
+//			|| (curFrame > 2800 && curFrame < 3000)
+//			|| (curFrame > 3600 && curFrame < 3900)
+//			|| (curFrame > 4150 && curFrame < 4241) || (curFrame > 5600))
+//
+//	&& mcg.checkPossibleMergable(10, 0.5, SLAMParam::maxDistRatio) > 0) {
+	if (mcg.checkPossibleMergable(10, 0.5, SLAMParam::maxDistRatio) > 0) {
+			return true;
+		}
+	return false;
+}
+
+bool CoSLAM::mergeCamGroups_new(KeyFrame* newFrame) {
+	MergeCameraGroup mcg;
+	mcg.setCurrentFrame(newFrame);
+	for (int i = 0; i < numCams; i++)
+		mcg.setImageSize(i, slam[i].m_img.w, slam[i].m_img.h);
+
+		//store the images and feature points
+		for (int i = 0; i < numCams; i++)
+			newFrame->pPose[i]->setImage(slam[i].m_img);
+
+		mcg.storeFeaturePoints();
+		mcg.printMergeInfo();
+
+		if (mcg.matchMergableCameras() > 0) {
+			//start to compute the new positions of key camera poses
+			//test
+			logInfo("before correction!\n");
+			mcg.printMergeInfo();
+			MyApp::bCancelBA = true;
+			//test
+			//pause();
+
+			//search for the first key frame when all the separated cameras are in the same group.
+			mcg.searchFirstKeyFrameForMerge();
+
+			mcg.constructGraphForKeyFrms();
+			logInfo("keyFrms\n");
+			//pause();
+
+			mcg.constructGraphForAllFrms();
+			logInfo("allFrms\n");
+			//pause();
+
+			enterBACriticalSection();
+			mcg.recomputeKeyCamPoses();
+			leaveBACriticalSection();
+
+			logInfo("recomputed keyframes\n");
+			//pause();
+			enterBACriticalSection();
+			mcg.recomputeAllCameraPoses();
+
+			m_mergedgid = mcg.mergeMatchedGroups(m_groups, m_groupNum);
+
+			//update group id
+			for (int g = 0; g < m_groupNum; ++g) {
+				for (int i = 0; i < m_groups[g].num; ++i) {
+					int c = m_groups[g].camIds[i];
+					m_groupId[c] = g;
+				}
+			}
+			leaveBACriticalSection();
+
+			printCamGroup();
+			logInfo("camera positions have been updated!\n");
+			//test
+			//pause();
+
+			enterBACriticalSection();
+			vector<MapPoint*> keyMapPoints;
+			int f_start =
+					mcg.getFirstFrame() < m_lastReleaseFrm ?
+							m_lastReleaseFrm : mcg.getFirstFrame();
+
+			int f_end = mcg.getLastFrame();
+			getMapPts(f_start, f_end, keyMapPoints);
+			mcg.recomputeMapPoints(keyMapPoints, Const::PIXEL_ERR_VAR);
+			leaveBACriticalSection();
+			logInfo("point positions have been updated!\n");
+			//test
+			//pause();
+
+			currentMapPointsRegister(10.0, true);
+			logInfo("feature points have been merged!\n");
+
+			m_lastFrmGroupMerge = curFrame;
+			//pause();
+
+			MyApp::_mergeable = false;
+			MyApp::_imgAvailableForMerge = false;
+			return true;
+		}
+	return false;
+}
+
 void CoSLAM::getNumDynamicStaticPoints() {
 	//check whether there are too many dynamic map points
 	MapPoint* pM = curMapPts.getHead();
@@ -2597,17 +2851,185 @@ void CoSLAM::getAllFeatPtsAtKeyFrms(int c, vector<FeaturePoint*>& featPoints) {
 			featPoints.push_back(fp);
 	}
 }
+
+void CoSLAM::getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
+		vector<vector<Point3dId> >& dynTracks, int trjLen) {
+	map<size_t, vector<Point3dId> > tracks;
+
+	dynTracks.clear();
+	if (dynMapPts.empty())
+		return;
+
+	int l = 0;
+	for (vector<vector<Point3dId> >::const_reverse_iterator iter =
+			dynMapPts.rbegin(); iter != dynMapPts.rend() && l < trjLen;
+			iter++, l++) {
+		const vector<Point3dId>& pts = *iter;
+		if (l == 0) {
+			for (size_t n = 0; n < pts.size(); n++) {
+				size_t id = pts[n].id;
+				tracks[id].push_back(pts[n]);
+			}
+		} else {
+			for (size_t n = 0; n < pts.size(); n++) {
+				size_t id = pts[n].id;
+				if (tracks.count(id) == 0)
+					continue;
+				else
+					tracks[id].push_back(pts[n]);
+			}
+		}
+	}
+
+	for (map<size_t, vector<Point3dId> >::iterator iter = tracks.begin();
+			iter != tracks.end(); iter++) {
+		dynTracks.push_back(iter->second);
+	}
+}
+
+bool compareFunc (std::pair<double, int> a, std::pair<double, int> b) { return (a.first < b.first); }
 void CoSLAM::storeDynamicPoints() {
 	if (numCams == 1)
 		return;
 	using namespace std;
 	std::vector<Point3dId> pts;
+	double dynPtsCenter[3];
+	dynPtsCenter[0] = dynPtsCenter[1] = dynPtsCenter[2] = 0;
+
 	for (MapPoint* mpt = curMapPts.getHead(); mpt; mpt = mpt->next) {
 		if (mpt->isCertainDynamic()) {
 			pts.push_back(Point3dId(mpt->x, mpt->y, mpt->z, mpt->id));
+			dynPtsCenter[0] += mpt->x;
+			dynPtsCenter[1] += mpt->y;
+			dynPtsCenter[2] += mpt->z;
+//			printf("%lf, %lf, %lf\n", mpt->x, mpt->y, mpt->z);
 		}
 	}
 	m_dynPts.push_back(pts);
+	std::vector<std::vector<Point3dId> > dynTracks;
+	std::vector<cv::Point3f> dynVel;
+	getDynTracks(m_dynPts, dynTracks, 10);
+	for (int ii = 0; ii < dynTracks.size(); ii++){
+		dynVel.push_back(cv::Point3f(dynTracks[ii][0].x - dynTracks[ii][1].x,
+				dynTracks[ii][0].y - dynTracks[ii][1].y,
+				dynTracks[ii][0].z - dynTracks[ii][1].z));
+	}
+
+//	if (pts.size()> 10){
+//
+//		double minSum = 100000000;
+//		int minId = -1;
+//		for (int i = 0; i < dynVel.size(); i++){
+//			double sum = 0;
+//			for (int j = 0; j < dynVel.size(); j++){
+//				double len1 = sqrt(dynVel[i].x * dynVel[i].x + dynVel[i].y * dynVel[i].y +
+//						dynVel[i].z * dynVel[i].z);
+//				double len2 = sqrt(dynVel[j].x * dynVel[j].x + dynVel[j].y * dynVel[j].y +
+//										dynVel[j].z * dynVel[j].z);
+//				sum += abs(acos(dynVel[i].dot(dynVel[j]) / (len1 * len2)));
+//			}
+//			if (sum < minSum){
+//				minSum = sum;
+//				minId = i;
+//			}
+//		}
+//
+//		dynObjPos[0] = pts[minId].x;
+//		dynObjPos[1] = pts[minId].y;
+//		dynObjPos[2] = pts[minId].z;
+//		dynObjPresent = true;
+//
+//	}
+//	else
+//	{
+//		dynObjPos[0] = dynObjPos[1] = dynObjPos[2] = 0;
+//		dynObjPresent = false;
+//	}
+
+
+	if (pts.size()> 10){
+
+		double minSum = 100000000;
+		int minId = -1;
+		for (int i = 0; i < pts.size(); i++){
+			double sum = 0;
+			for (int j = 0; j < pts.size(); j++){
+				sum += dist3(pts[i].M, pts[j].M);
+			}
+			if (sum < minSum){
+				minSum = sum;
+				minId = i;
+			}
+		}
+//
+		double prevWeight = 0.9;
+		double pose[3];
+		if (!prevPoseSet){
+			prevPose[0] = pts[minId].x;
+			prevPose[1] = pts[minId].y;
+			prevPose[2] = pts[minId].z;
+			pose[0] = pts[minId].x;
+			pose[1] = pts[minId].y;
+			pose[2] = pts[minId].z;
+			prevPoseSet = true;
+		}
+		else{
+			pose[0] = prevWeight * prevPose[0] + (1 - prevWeight) * pts[minId].x;
+			pose[1] = prevWeight * prevPose[1] + (1 - prevWeight) * pts[minId].y;
+			pose[2] = prevWeight * prevPose[2] + (1 - prevWeight) * pts[minId].z;
+			prevPose[0] = pose[0];
+			prevPose[1] = pose[1];
+			prevPose[2] = pose[2];
+		}
+
+		dynObjPos[0] = pose[0];
+		dynObjPos[1] = pose[1];
+		dynObjPos[2] = pose[2];
+		dynObjPresent = true;
+	}
+	else
+	{
+		dynObjPos[0] = dynObjPos[1] = dynObjPos[2] = 0;
+		dynObjPresent = false;
+	}
+
+
+	double prevDynTs = -1;
+	double prevDynPos[3];
+	prevDynPos[0] = prevDynPos[1] = prevDynPos[2] = 0;
+	if (dynObjPresent){
+		for (int i=0; i < numCams; i++){
+			slam[i].m_camPos.current()->setDynPos(dynObjPos);
+		}
+//
+//		if (prevDynTs < 0){
+//			prevDynTs = slam[0].m_camPos.current()->ts;
+//			prevDynPos[0] = dynObjPos[0];
+//			prevDynPos[1] = dynObjPos[1];
+//			prevDynPos[2] = dynObjPos[2];
+//			for (int i=0; i < numCams; i++){
+//				slam[i].m_camPos.current()->setDynPos(dynObjPos);
+//			}
+//		}
+//		else{
+//			double TsDiff = slam[0].m_camPos.current()->ts - prevDynTs;
+//			double distDiff = pow(dynObjPos[0] - prevDynPos[0],2);
+//			distDiff += pow(dynObjPos[1] - prevDynPos[1],2);
+//			distDiff += pow(dynObjPos[2] - prevDynPos[2],2);
+//			distDiff = sqrt(distDiff);
+//
+//			if (distDiff / TsDiff < 0.3){
+//				for (int i=0; i < numCams; i++){
+//					slam[i].m_camPos.current()->setDynPos(dynObjPos);
+//				}
+//				prevDynTs = slam[0].m_camPos.current()->ts;
+//				prevDynPos[0] = dynObjPos[0];
+//				prevDynPos[1] = dynObjPos[1];
+//				prevDynPos[2] = dynObjPos[2];
+//			}
+//		}
+	}
+	m_dynPtsCenter.push_back(cv::Point3f(dynObjPos[0], dynObjPos[1], dynObjPos[2]));
 }
 
 #include <time.h>
@@ -2622,6 +3044,59 @@ void CoSLAM::exportResultsVer1(const char timeStr[]) const {
 #endif
 
 	char filePath[256];
+	cv::VideoWriter vw[2];
+	sprintf(filePath, "%s/video0.avi", dirPath);
+	cv::Size S0(MyApp::rosReader[0]._imgs.back().cols, MyApp::rosReader[0]._imgs.back().rows);
+	vw[0].open(filePath, CV_FOURCC('M','J','P','G'), 25, S0, 0);
+//		if(!vw[0].isOpened())return -1;
+//
+	for (list<cv::Mat>::iterator it = MyApp::rosReader[0]._imgs.begin();
+			it != MyApp::rosReader[0]._imgs.end(); it++){
+		vw[0] << *it;
+	}
+	vw[0].release();
+
+	sprintf(filePath, "%s/video1.avi", dirPath);
+	cv::Size S(MyApp::rosReader[1]._imgs.back().cols, MyApp::rosReader[1]._imgs.back().rows);
+	vw[1].open(filePath, CV_FOURCC('M','J','P','G'), 25, S, 0);
+//		if(!vw[0].isOpened())return -1;
+//
+	for (list<cv::Mat>::iterator it = MyApp::rosReader[1]._imgs.begin();
+			it != MyApp::rosReader[1]._imgs.end(); it++){
+		vw[1] << *it;
+	}
+	vw[1].release();
+
+	sprintf(filePath, "%s/rosTime.txt", dirPath);
+	FILE* fid = fopen(filePath,"w");
+	for (int i = 0; i < MyApp::rosTime_whole.size(); i = i + 4){
+		fprintf(fid, "%lf %lf %lf %lf\n",
+				MyApp::rosTime_whole[i], MyApp::rosTime_whole[i+1],
+				MyApp::rosTime_whole[i+2], MyApp::rosTime_whole[i+3]);
+	}
+	fclose(fid);
+
+	sprintf(filePath, "%s/ar_marker_calib_res.txt", dirPath);
+	fid = fopen(filePath,"w");
+	fprintf(fid, "%lf\n", scale_global2Cam);
+	for (int i = 0; i <9; i++){
+		fprintf(fid, "%lf ", R_global2Cam[i]);
+	}
+	fprintf(fid, "\n");
+	for (int i = 0; i <3; i++){
+		fprintf(fid, "%lf ", t_global2Cam[i]);
+	}
+	fprintf(fid, "\n");
+	fclose(fid);
+
+	sprintf(filePath, "%s/dynPts.txt", dirPath);
+	fid = fopen(filePath,"w");
+	for(int i = 0; i < m_dynPts.size(); i++){
+		fprintf(fid, "%d\n", i);
+		for (int j = 0; j < m_dynPts[i].size(); j++){
+			fprintf(fid,"%lf %lf %lf\n", m_dynPts[i][j].x, m_dynPts[i][j].y, m_dynPts[i][j].z);
+		}
+	}
 
 	//save the information of the input video sequences 
 	//and camera parameters
@@ -2696,7 +3171,13 @@ void CoSLAM::exportResultsVer1(const char timeStr[]) const {
 					cam->R[3], cam->R[4], cam->R[5],
 					cam->R[6], cam->R[7], cam->R[8],
 					cam->t[0], cam->t[1], cam->t[2]);
-
+			if(cam->dynObjPresent){
+				fprintf(camFile, "1 %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1],
+						cam->currDynPos[2]);
+			}
+			else
+				fprintf(camFile, "0 %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1],
+						cam->currDynPos[2]);
 		}
 //		file.close();
 		fclose(camFile);

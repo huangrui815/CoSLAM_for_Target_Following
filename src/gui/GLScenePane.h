@@ -41,6 +41,9 @@ public:
 	double m_center[3];
 	double m_scale;
 
+	bool mDynObjPresent;
+	double mDynObjPos[3];
+
 	/* slam data*/
 	const CoSLAM* m_pSLAM;
 	std::vector<const MapPoint*> curMapPoints;
@@ -64,6 +67,9 @@ public:
 	void drawCameraGroups();
 	virtual void drawGLObjs();
 	void saveScreen(const char* filePath);
+
+	void getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
+			vector<vector<Point3dId> >& dynTracks, int trjLen);
 public:
 	void resized(wxSizeEvent& evt);
 	void rightClick(wxMouseEvent& event);

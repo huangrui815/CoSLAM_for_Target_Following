@@ -16,7 +16,8 @@ EVT_KEY_DOWN(GLScenePane::keyPressed)
 EVT_CHAR(GLScenePane::charPressed)
 END_EVENT_TABLE()
 ///////////////////////////////////////////////////
-void getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
+;
+void GLScenePane::getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
 		vector<vector<Point3dId> >& dynTracks, int trjLen) {
 	map<size_t, vector<Point3dId> > tracks;
 
@@ -71,6 +72,9 @@ void GLScenePane::copyDispData() {
 	dynTracks.clear();
 	getDynTracks(m_pSLAM->m_dynPts, dynTracks, m_nTrjLen);
 	m_groupNum = groupNum;
+
+	mDynObjPresent = m_pSLAM->dynObjPresent;
+	memcpy(mDynObjPos, m_pSLAM->dynObjPos, 3 * sizeof(double));
 	pthread_mutex_unlock(&MyApp::s_mutexBA);
 
 	if (m_autoScale)
@@ -166,6 +170,14 @@ void GLScenePane::drawPoints() {
 	}
 	glEnd();
 
+	if (mDynObjPresent){
+		glPointSize(30.0 * m_pointSize);
+		glBegin(GL_POINTS);
+		glColor3d(1.0, 0, 0);
+		glVertex3d(mDynObjPos[0], mDynObjPos[1], mDynObjPos[2]);
+		glEnd();
+	}
+
 	//draw dynamic trajectories
 	if (m_drawDynTrj) {
 //		glPointSize(0.5);
@@ -182,6 +194,43 @@ void GLScenePane::drawPoints() {
 //		}
 //		glEnd();
 
+
+		// Simple Clustering
+//		vector<cv::Point3f> dynVel;
+//		dynVel.clear();
+//		for (size_t n = 0; n < dynTracks.size(); n++) {
+//			dynVel.push_back(cv::Point3f(dynTracks[n][0].x - dynTracks[n][1].x,
+//					dynTracks[n][0].y - dynTracks[n][1].y,
+//					dynTracks[n][0].z - dynTracks[n][1].z));
+//		}
+//
+//		vector<double> numLike;
+//		vector<vector<int> > idLike;
+//		int maxId = -1;
+//		int maxNum = 0;
+//
+//		for (int i = 0; i < dynVel.size(); i++){
+//			vector<int> ids;
+//			for (int j = 0; j < dynVel.size(); j++){
+////				if(j != i){
+//					double lengthDiff = 0;
+//					double lengthI = sqrt(pow(dynVel[i].x,2) + pow(dynVel[i].y,2) + pow(dynVel[i].z,2));
+//					double lengthJ = sqrt(pow(dynVel[j].x,2) + pow(dynVel[j].y,2) + pow(dynVel[j].z,2));
+//					lengthDiff = abs(lengthI - lengthJ);
+//					double dotVec = dynVel[i].dot(dynVel[j]);
+//					double theta = acos(dotVec / (lengthI * lengthJ)) * 180 / 3.1415926;
+//					if (theta < 30){
+//						ids.push_back(j);
+//					}
+////				}
+//			}
+//			idLike.push_back(ids);
+//			if (ids.size() > maxNum){
+//				maxId = i;
+//				maxNum = ids.size();
+//			}
+//		}
+
 		for (size_t n = 0; n < dynTracks.size(); n++) {
 			glLineWidth(0.5);
 			glBegin(GL_LINE_STRIP);
@@ -194,6 +243,31 @@ void GLScenePane::drawPoints() {
 			}
 			glEnd();
 		}
+//
+//		if (maxId > -1){
+////			for (size_t ii = 0; ii < idLike[maxId].size(); ii++) {
+////				int n = idLike[maxId][ii];
+////				glLineWidth(1.5);
+////				glBegin(GL_LINE_STRIP);
+////
+////				double alpha = 1.0 / dynTracks[n].size();
+////				for (size_t i = 0; i < dynTracks[n].size(); i++) {
+////					glColor4d(1, 0, 0, 1.0 - i * alpha);
+////					glVertex3d(dynTracks[n][i].x, dynTracks[n][i].y,
+////							dynTracks[n][i].z);
+////				}
+////				glEnd();
+////			}
+//			for (size_t ii = 0; ii < idLike[maxId].size(); ii++){
+//				int n = idLike[maxId][ii];
+//				glPointSize(10.0 * m_pointSize);
+//				glBegin(GL_POINTS);
+//				glColor3d(1.0, 0, 0);
+//				glVertex3d(dynTracks[n][0].x, dynTracks[n][0].y,
+//						dynTracks[n][0].z);
+//				glEnd();
+//			}
+//		}
 	}
 }
 //float GLScenePane::CAMERA_COLORS[15] = { 1.0f, 0.0f, 0.0f, 0.2f, 0.8f, 0.0f,
@@ -492,7 +566,7 @@ void GLScenePane::keyPressed(wxKeyEvent& event) {
 	} else if (event.GetKeyCode() == 'D') {
 		MyApp::modelWnd1->glPane->save("scene1_display.txt");
 		MyApp::modelWnd2->glPane->save("scene2_display.txt");
-	} else {
+	} else if(event.GetKeyCode() == WXK_SPACE){
 		MyApp::bStop = !MyApp::bStop;
 //		m_drawDynTrj = MyApp::bStop;
 	}

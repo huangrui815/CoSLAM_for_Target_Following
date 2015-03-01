@@ -10,6 +10,7 @@
 #include "slam/SL_Define.h"
 #include "geometry/SL_Distortion.h"
 #include "tools/SL_TypeConversion.h"
+#include "slam/SL_MapPoint.h"
 #include <fstream>
 #include <sstream>
 
@@ -886,6 +887,21 @@ int FeatureTracker::feedExternFeatPoints(std::vector<FeaturePoint*>& externFeatP
 
 }
 
+int FeatureTracker::getNumDynamicFeats(){
+	int num = 0;
+	for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++){
+		if (m_tks[i].empty())
+			continue;
+
+		FeaturePoint* fp = m_tks[i].tail->pt;
+		if (fp && fp->mpt && fp->mpt->isCertainDynamic()){
+			num++;
+		}
+	}
+	printf("getNumDynamicFeats %d\n", num);
+	return num;
+}
+
 int FeatureTracker::next(const unsigned char* imgData, FeaturePoints& ips) {
 	ImgG img;
 	img.resize(W_, H_);
@@ -895,6 +911,9 @@ int FeatureTracker::next(const unsigned char* imgData, FeaturePoints& ips) {
 	getCurrFeatures();
 	klt_.provideCurrFeatures(oldImg, _corners);
 	}
+
+	klt_._numDynamicFeatPts = getNumDynamicFeats();
+
 	frame_++;
 	Mat_d pts;
 	Mat_i flag;
@@ -950,7 +969,7 @@ void FeatureTracker::updateTracks02(FeaturePoints& ips,
 	_featureId2TrackId.clear();
 	vector<int> newFeatureId;
 
-	cout << "featureId size: " << featureId.size() << endl;
+//	cout << "featureId size: " << featureId.size() << endl;
 
 	for (int i = 0; i < featureId.size(); i++){
 		unsigned int id = featureId[i];
@@ -971,7 +990,7 @@ void FeatureTracker::updateTracks02(FeaturePoints& ips,
 		}
 	}
 
-	cout << "new Feature Id size: " << newFeatureId.size() << endl;
+//	cout << "new Feature Id size: " << newFeatureId.size() << endl;
 
 	int k = 0;
 	for (int i = 0; i < m_nMaxCorners; i++){

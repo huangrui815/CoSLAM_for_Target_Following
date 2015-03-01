@@ -14,6 +14,8 @@
 #include "gui/MyApp.h"
 #include "slam/SL_SLAMHelper.h"
 
+bool receiveFeatures = false;
+
 bool ROSMain_features() {
 	CoSLAM& coSLAM = MyApp::coSLAM;
 	/////////////////////////1.GPU initilization/////////////////////////
@@ -101,7 +103,8 @@ bool ROSMain_features() {
 				if (coSLAM.initMap()){
 
 					// Need this in real test
-//					coSLAM.calibGlobal2Cam();
+					coSLAM.calibGlobal2Cam();
+//					return 0;
 
 					for (int i = 0; i < coSLAM.numCams; i++)
 						coSLAM.state[i] = SLAM_STATE_NORMAL;
@@ -147,14 +150,29 @@ bool ROSMain_features() {
 		while (!MyApp::bExit) {
 //			while (MyApp::bStop) {/*stop*/
 //			}
+
+//			if (MyApp::_mergeable){
+//				if (MyApp::_imgReady[0] && MyApp::_imgReady[1]){
+//					coSLAM.grabReadFrame();
+//					MyApp::_imgAvailableForMerge = true;
+//				}
+//				else
+//					continue;
+//			}
+
 			i++;
 			TimeMeasurer tmPerStep;
 			tmPerStep.tic();
 
-//			coSLAM.grabReadFrame();
-//			coSLAM.featureTracking();
-			coSLAM.featureReceiving();
-			coSLAM.virtualReadFrame();
+
+			if (!receiveFeatures){
+				coSLAM.grabReadFrame();
+				coSLAM.featureTracking();
+			}
+			else{
+				coSLAM.featureReceiving();
+				coSLAM.virtualReadFrame();
+			}
 
 			coSLAM.poseUpdate(bEstPose);
 			//Use redis to send over the poses
@@ -187,10 +205,19 @@ bool ROSMain_features() {
 			TimeMeasurer tmNewMapPoints;
 			tmNewMapPoints.tic();
 
-			bool merged = false;
-			coSLAM.genNewMapPoints(merged);
-			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
-			cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
+			if (receiveFeatures){
+				coSLAM.genNewMapPoints_new();
+				if (MyApp::_mergeable)
+					MyApp::triggerClients();
+			}
+			else
+			{
+				bool merge = false;
+				coSLAM.genNewMapPoints(merge);
+			}
+//
+//			coSLAM.m_tmNewMapPoints = tmNewMapPoints.toc();
+//			cout << "coSLAM.m_tmNewMapPoints" << coSLAM.m_tmNewMapPoints << endl;
 
 			//point registration
 			coSLAM.currentMapPointsRegister(Const::PIXEL_ERR_VAR,
@@ -212,25 +239,47 @@ bool ROSMain_features() {
 			coSLAM.m_tmPerStep = tmPerStep.toc();
 			tmStepVec.push_back(coSLAM.m_tmPerStep);
 
-			MyApp::triggerClients();
+			//Send pose
+			for (int i = 0; i < coSLAM.numCams; i++)
+			{
+				if (coSLAM.slam[i].m_camPos.size() > 0){
+					double org[3], rpy[3];
+					CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+					double ts = cam->ts;
+					getCamCenter(cam, org);
+					coSLAM.transformCamPose2Global(cam, org, rpy);
+
+					double targetPos[3];
+					targetPos[0] = targetPos[1] = targetPos[2] = 0;
+					double theta = 0;
+					if(coSLAM.dynObjPresent){
+						coSLAM.transformTargetPos2Global(cam->currDynPos, targetPos);
+						//printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+						coSLAM.slam[i].projectTargetToCam(cam, cam->currDynPos);
+						theta = atan2(coSLAM.slam[i]._targetPosInCam[0], coSLAM.slam[i]._targetPosInCam[2]);
+//							double H = targetPos[2] * 2;
+//							double Z = coSLAM.slam[i]._targetPosInCam[2];
+						MyApp::redis[i]->setPoseTarget(ts, 1, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.9);
+						MyApp::redis_dynObj->setDynObj(targetPos[0], targetPos[1], targetPos[2]);
+//						printf("currDynPos: %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1], cam->currDynPos[2]);
+					}
+					else
+						MyApp::redis[i]->setPoseTarget(ts, 0, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.9);
+
+//					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+//					printf("org[2]: %lf %lf %lf\n", org[0], org[1], rpy[2]);
+				}
+			}
 		}
 
-		FILE* fid = fopen("/home/rui/rosTime.txt","w");
-		for (int i = 0; i < MyApp::rosTime_whole.size(); i = i + 4){
-			fprintf(fid, "%lf %lf %lf %lf\n",
-					MyApp::rosTime_whole[i], MyApp::rosTime_whole[i+1],
-					MyApp::rosTime_whole[i+2], MyApp::rosTime_whole[i+3]);
-		}
-		fclose(fid);
+		cout << " the result is saved at " << MyApp::timeStr << endl;
+		coSLAM.exportResults(MyApp::timeStr);
 
-		fid = fopen("/home/rui/coslamTime.txt","w");
+		FILE* fid = fopen("/home/rui/coslamTime.txt","w");
 		for (int i = 0; i < tmStepVec.size(); i++){
 			fprintf(fid, "%lf\n", tmStepVec[i]);
 		}
 		fclose(fid);
-
-		cout << " the result is saved at " << MyApp::timeStr << endl;
-		coSLAM.exportResults(MyApp::timeStr);
 
 //		FILE* fid = fopen("slam_timing.txt","w");
 //		for (int i = 0; i < tmStepVec.size(); i++)

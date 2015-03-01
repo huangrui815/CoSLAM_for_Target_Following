@@ -83,6 +83,8 @@ public:
 	double camT[SLAM_MAX_NUM][3];
 
 	int numCams;
+
+	cv::Mat _cornerDesc[SLAM_MAX_NUM];
 public:
 	InitMap();
 	~InitMap();
@@ -99,6 +101,7 @@ public:
 
 	int estimateFmat(const Mat_d& pts1, const Mat_d& pts2, Mat_d& F,
 			Mat_uc& inlierFlag);
+	int estimateEmat(const Mat_d& pts1, const Mat_d& pts2, Mat_uc& inlierFlag, int iCam, int jCam);
 
 	/* add cameras*/
 	void addCam(const SingleSLAM& cam);
@@ -111,9 +114,12 @@ public:
 
 	int matchSiftBetween(int iCam, int jCam);
 	int matchSiftBetween_usingF(int iCam, int jCam);
+	int matchSiftBetween_usingE(int iCam, int jCam);
 
 	/* match corners between views by NCC*/
 	void matchCornerNCCBetween(int iCam, int jCam, double minNcc, double maxEpi,
+			double maxDisp);
+	void matchCornerDesc(int iCam, int jCam, double minNcc, double maxEpi,
 			double maxDisp);
 
 	/* select the image order*/

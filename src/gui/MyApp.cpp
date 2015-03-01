@@ -81,12 +81,17 @@ pthread_t MyApp::_nodeThread;
 CBRedisClient* MyApp::redis[SLAM_MAX_NUM];
 CBRedisClient* MyApp::redis_start;
 CBRedisClient* MyApp::redis_vel;
+CBRedisClient* MyApp::redis_dynObj;
 
 PosVelKF MyApp::posVelKF[SLAM_MAX_NUM][3];
 
 cv::Point3f MyApp::markerPoseGlobal[MAX_NUM_MARKERS];
 int MyApp::_numMarkers = 4;
 bool MyApp::usingKF = false;
+bool MyApp::_mergeable = false;
+bool MyApp::_imgAvailableForMerge = false;
+bool MyApp::_imgReady[SLAM_MAX_NUM];
+
 
 vector<double> MyApp::rosTime_whole;
 vector<double> MyApp::rosTime_coslam;
@@ -244,8 +249,8 @@ bool MyApp::initOffline() {
 //
 //	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video0.avi");
 //	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video1.avi");
-	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video0_merge.avi");
-	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video1_merge.avi");
+	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/dynamic09/video0.avi");
+	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/dynamic09/video1.avi");
 
 //	SLAMParam::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data59/video.avi");
 
@@ -282,14 +287,9 @@ bool MyApp::initOffline() {
 			"/home/rui/workspace/calibrations/odroid.txt");
 
 	vector<int> startFrame;
-//	startFrame.push_back(150);
-//	startFrame.push_back(200);
-//	startFrame.push_back(200);
 
-//	startFrame.push_back(640);
-//	startFrame.push_back(640);
-	startFrame.push_back(60);
-	startFrame.push_back(60);
+	startFrame.push_back(500);
+	startFrame.push_back(500);
 
 
 	SLAMParam::nInitFrame = 0;
@@ -553,9 +553,9 @@ bool MyApp::initROS_features() {
 //	SLAMParam::camFilePath.push_back(
 //				"/home/rui/workspace/calibrations/asusCam.txt");
 	SLAMParam::camFilePath.push_back(
-			"/home/rui/workspace/calibrations/odroid.txt");
+			"/home/rui/workspace/calibrations/logitech_ball.txt");
 	SLAMParam::camFilePath.push_back(
-			"/home/rui/workspace/calibrations/odroid.txt");
+			"/home/rui/workspace/calibrations/logitech_ball.txt");
 //	SLAMParam::camFilePath.push_back(
 //			"/home/rui/workspace/calibrations/odroid.txt");
 
@@ -592,6 +592,7 @@ bool MyApp::initROS_features() {
 	MyApp::redis[1] = new CBRedisClient("odroid03", "192.168.1.137", 6379);
 	MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
 	MyApp::redis_vel = new CBRedisClient("vel", "192.168.1.137", 6379);
+	MyApp::redis_dynObj = new CBRedisClient("target", "192.168.1.137", 6379);
 
 	videoNodeInit();
 	featureNodeInit();
@@ -715,7 +716,7 @@ void MyApp::subCB_two_videos(const sensor_msgs::ImageConstPtr &img1,  const sens
 	}
 
 	//pthread_mutex_lock(&_mutexImg);
-	if (MyApp::rosReader[0]._imgs.size() > 10)
+	if (MyApp::rosReader[0]._imgs.size() > 10 * 60 * 30)
 	{
 		MyApp::rosReader[0]._imgs.pop_front();
 		MyApp::rosReader[1]._imgs.pop_front();
@@ -835,12 +836,13 @@ void MyApp::subCB_two_features(const coslam_feature_tracker::featuresConstPtr &f
 	coslam_feature_tracker::features fts0 = *features0;
 	coslam_feature_tracker::features fts1 = *features1;
 
-	cout << "subCB_two_features\n";
+//	cout << "subCB_two_features\n";
 
 //	if (MyApp::featuresList[0].size() > 10){
 //		MyApp::featuresList[0].pop_front();
 //		MyApp::featuresList[1].pop_front();
 //	}
+
 	pthread_mutex_lock(&MyApp::_mutexFeatures);
 	MyApp::featuresList[0].push_back(fts0);
 	MyApp::featuresList[1].push_back(fts1);
@@ -873,13 +875,41 @@ void MyApp::subCB_3_features(const coslam_feature_tracker::featuresConstPtr &fea
 	ROS_INFO("features0: %f, features1: %f\n", features0->header.stamp.toSec(), features1->header.stamp.toSec());
 }
 
+void MyApp::subCB_video01(const sensor_msgs::ImageConstPtr &img){
+	if (MyApp::_mergeable){
+		cv_bridge::CvImagePtr cv_ptr;
+		cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+		MyApp::rosReader[0]._imgs.push_back(cv_ptr->image);
+		MyApp::rosReader[0]._ts.push_back(img->header.stamp.toSec());
+		MyApp::rosReader[0]._seqs.push_back(img->header.seq);
+		_imgReady[0] = true;
+	}
+}
+
+void MyApp::subCB_video02(const sensor_msgs::ImageConstPtr &img){
+	if (MyApp::_mergeable){
+		cv_bridge::CvImagePtr cv_ptr;
+		cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+		MyApp::rosReader[1]._imgs.push_back(cv_ptr->image);
+		MyApp::rosReader[1]._ts.push_back(img->header.stamp.toSec());
+		MyApp::rosReader[1]._seqs.push_back(img->header.seq);
+		_imgReady[1] = true;
+	}
+}
+
 void MyApp::videoNodeInit(){
 	_it = new image_transport::ImageTransport(_nh);
 //	sub_video[0].subscribe(*_it, "/gonk_usb_cam/image_raw", 100);
 //	sub_video[1].subscribe(*_it, "/kitt_usb_cam/image_raw", 100);
 
-	sub_video[0].subscribe(*_it, "/coslam_feature_tracker1/image_raw", 10);
-	sub_video[1].subscribe(*_it, "/coslam_feature_tracker3/image_raw", 10);
+	sub_video[0].subscribe(*_it, "/coslam_feature_tracker04/image_raw", 10);
+	sub_video[1].subscribe(*_it, "/coslam_feature_tracker05/image_raw", 10);
+
+//	sub[0] = _it->subscribe("/coslam_feature_tracker04/image_raw", 10, MyApp::subCB_video01);
+//	sub[1] = _it->subscribe("/coslam_feature_tracker05/image_raw", 10, MyApp::subCB_video02);
+
+	_imgReady[0] = false;
+	_imgReady[1] = false;
 //	sub_video[2].subscribe(*_it, "/coslam_feature_tracker3/image_raw", 10);
 
 
@@ -895,12 +925,12 @@ void MyApp::featureNodeInit(){
 	pub_triggerClients = _nh.advertise<std_msgs::Byte>("/trigger",1);
 
 //	for (int i = 0; i <_camNum; i++){
-		pub_features[0] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker1/init_features",10);
-		pub_features[1] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker3/init_features",10);
+		pub_features[0] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker04/init_features",10);
+		pub_features[1] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker05/init_features",10);
 //		pub_features[2] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker3/init_features",10);
 
-		sub_features[0].subscribe(_nh, "/coslam_feature_tracker1/features", 10);
-		sub_features[1].subscribe(_nh, "/coslam_feature_tracker3/features", 10);
+		sub_features[0].subscribe(_nh, "/coslam_feature_tracker04/features", 10);
+		sub_features[1].subscribe(_nh, "/coslam_feature_tracker05/features", 10);
 //		sub_features[2].subscribe(_nh, "/coslam_feature_tracker3/features", 10);
 //	}
 
@@ -915,22 +945,22 @@ void MyApp::featureNodeInit(){
 void MyApp::subCB_2_marker_pose(const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers0,
 			const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers1){
 
-	ROS_INFO("Received markers sizes: %d %d\n", markers0->markers.size(),
-					markers1->markers.size());
+//	ROS_INFO("Received markers sizes: %d %d\n", markers0->markers.size(),
+//					markers1->markers.size());
 
 	if (markers0->markers.size() == _numMarkers
 			&& markers1->markers.size() == _numMarkers)
 	{
 		MyApp::markerList[0].push_back(*markers0);
 		MyApp::markerList[1].push_back(*markers1);
-		ROS_INFO("Received markers: %lf %lf\n", markers0->header.stamp.toSec(),
-				markers1->header.stamp.toSec());
+//		ROS_INFO("Received markers: %lf %lf\n", markers0->header.stamp.toSec(),
+//				markers1->header.stamp.toSec());
 	}
 }
 
 void MyApp::arMarkerNodeInit(){
-	sub_ar_marker_pose[0].subscribe(_nh, "/cbodroid01/ar_pose_marker", 1);
-	sub_ar_marker_pose[1].subscribe(_nh, "/cbodroid03/ar_pose_marker", 1);
+	sub_ar_marker_pose[0].subscribe(_nh, "/cbodroid04/ar_pose_marker", 1);
+	sub_ar_marker_pose[1].subscribe(_nh, "/cbodroid05/ar_pose_marker", 1);
 	markerPoseSync = new message_filters::Synchronizer< markerPoseSyncPolicy >(markerPoseSyncPolicy(10),
 			sub_ar_marker_pose[0], sub_ar_marker_pose[1]);
 	markerPoseSync->registerCallback(boost::bind(&MyApp::subCB_2_marker_pose, this, _1, _2));
@@ -940,10 +970,10 @@ void MyApp::arMarkerNodeInit(){
 //	MyApp::markerPoseGlobal[7].x = 0.14; MyApp::markerPoseGlobal[7].y = -0.142; MyApp::markerPoseGlobal[7].z = 1;
 //	MyApp::markerPoseGlobal[8].x = 0.0; MyApp::markerPoseGlobal[8].y = -0.142; MyApp::markerPoseGlobal[8].z = 1;
 
-	MyApp::markerPoseGlobal[1].x = 0.57; MyApp::markerPoseGlobal[1].y = 1.93; MyApp::markerPoseGlobal[1].z = 0.142;
-	MyApp::markerPoseGlobal[2].x = 0.43; MyApp::markerPoseGlobal[2].y = 1.93; MyApp::markerPoseGlobal[2].z = 0.142;
-	MyApp::markerPoseGlobal[7].x = 0.57; MyApp::markerPoseGlobal[7].y = 1.93; MyApp::markerPoseGlobal[7].z = 0;
-	MyApp::markerPoseGlobal[8].x = 0.43; MyApp::markerPoseGlobal[8].y = 1.93; MyApp::markerPoseGlobal[8].z = 0;
+	MyApp::markerPoseGlobal[1].x = 0.57; MyApp::markerPoseGlobal[1].y = 2; MyApp::markerPoseGlobal[1].z = 0.142;
+	MyApp::markerPoseGlobal[2].x = 0.43; MyApp::markerPoseGlobal[2].y = 2; MyApp::markerPoseGlobal[2].z = 0.142;
+	MyApp::markerPoseGlobal[7].x = 0.57; MyApp::markerPoseGlobal[7].y = 2; MyApp::markerPoseGlobal[7].z = 0;
+	MyApp::markerPoseGlobal[8].x = 0.43; MyApp::markerPoseGlobal[8].y = 2; MyApp::markerPoseGlobal[8].z = 0;
 }
 
 void MyApp::markerPose2ImageLoc(geometry_msgs::PoseStamped& pose,
@@ -980,7 +1010,7 @@ double MyApp::ComputeDesiredVel(double leaderVel, double desiredDist, double dis
 }
 
 void MyApp::loop(){
-	ros::Rate loop_rate(10);
+	ros::Rate loop_rate(30);
 	double ts_last;
 	double org_last[3];
 	bool last_set = false;
@@ -995,121 +1025,178 @@ void MyApp::loop(){
 //		MyApp::redis_vel->getOdometryPose(vel);
 //		printf("%f\n", vel);
 
-		if (SLAM_ready){
-			if (MyApp::usingKF){
-				double org[SLAM_MAX_NUM][3], rpy[SLAM_MAX_NUM][3];
-				double ts = -1;;
-				double ts_curr = -1;
-				int follower_id = 0;
-				int leader_id = 1;
-				vector<int> stateFlag(SLAM_MAX_NUM, 0);
-				stateFlag[leader_id] = 1;
-
-
-				for (int i = 0; i < coSLAM.numCams; i++){
-					if (coSLAM.slam[i].m_camPos.size() > 0){
-						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
-//						if (stateFlag[i] == 0 && ts < 0){
-//							ts = cam->ts;
+//		if (SLAM_ready){
+//			if (MyApp::usingKF){
+//				double org[SLAM_MAX_NUM][3], rpy[SLAM_MAX_NUM][3];
+//				double ts = -1;;
+//				double ts_curr = -1;
+//				int follower_id = 0;
+//				int leader_id = 1;
+//				vector<int> stateFlag(SLAM_MAX_NUM, 0);
+//				stateFlag[leader_id] = 1;
+//
+//
+//				for (int i = 0; i < coSLAM.numCams; i++){
+//					if (coSLAM.slam[i].m_camPos.size() > 0){
+//						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+////						if (stateFlag[i] == 0 && ts < 0){
+////							ts = cam->ts;
+////						}
+//
+//						coSLAM.transformCamPose2Global(cam, org[i], rpy[i]);
+//					}
+//				}
+//
+//				for (int i = 0; i < coSLAM.numCams; i++){
+//						double vel = 0;
+//
+//						std::string cmd;
+//						if (MyApp::redis_start->getStart(cmd)){
+//							if (stateFlag[i] == 0){
+//								float distToLeader = (org[0][0] - org[1][0]) * (org[0][0] - org[1][0]);
+//								distToLeader += (org[0][1] - org[1][1]) * (org[0][1] - org[1][1]);
+//								distToLeader = std::sqrt(distToLeader);
+//
+//								//get odometry meas from the redis
+//								vel = ComputeDesiredVel(FORWARD_SPEED, 1.0, distToLeader);
+//							}
+//							else{
+//								vel = FORWARD_SPEED;
+//							}
 //						}
-
-						coSLAM.transformCamPose2Global(cam, org[i], rpy[i]);
-					}
-				}
-
-				for (int i = 0; i < coSLAM.numCams; i++){
-						double vel = 0;
-
-						std::string cmd;
-						if (MyApp::redis_start->getStart(cmd)){
-							if (stateFlag[i] == 0){
-								float distToLeader = (org[0][0] - org[1][0]) * (org[0][0] - org[1][0]);
-								distToLeader += (org[0][1] - org[1][1]) * (org[0][1] - org[1][1]);
-								distToLeader = std::sqrt(distToLeader);
-
-								//get odometry meas from the redis
-								vel = ComputeDesiredVel(FORWARD_SPEED, 1.0, distToLeader);
-							}
-							else{
-								vel = FORWARD_SPEED;
-							}
-						}
-
-						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
-						ts = cam->ts;
-
-		//				MyApp::redis_vel->getOdometryPose(vel);
-						float x_vel, y_vel;
-
-						cv::Mat meas(2,1,CV_32F);
-
-						meas.at<float>(0,0) = rpy[i][2];
-						meas.at<float>(1,0) = 0;
-						posVelKF[i][2].updatePos(meas, ts, 0.1);
-						double yaw = posVelKF[i][2].getPos();
-						x_vel = vel * cos(yaw);
-						y_vel = vel * sin(yaw);
-
-						meas.at<float>(0,0) = org[i][0];
-						meas.at<float>(1,0) = x_vel;
-						posVelKF[i][0].update(meas, ts);
-
-						meas.at<float>(0,0) = org[i][1];
-						meas.at<float>(1,0) = y_vel;
-						posVelKF[i][1].update(meas, ts);
-
-						ts_curr = ros::Time::now().toSec();
-						MyApp::redis[i]->setPose(ts, ts_curr,
-								posVelKF[i][0].getPredPos(ts_curr),
-								posVelKF[i][0].getVel(),
-								posVelKF[i][1].getPredPos(ts_curr),
-								posVelKF[i][1].getVel(),
-								posVelKF[i][2].getPredPos(ts_curr)
-								);
-
-						printf("posx: %lf velx: %lf posy: %lf vely: %lf\n",
-								posVelKF[i][0].getPredPos(ts_curr), posVelKF[i][0].getVel(),
-								posVelKF[i][1].getPredPos(ts_curr),posVelKF[i][1].getVel());
-
-						rosTime_whole.push_back(ts);
-						rosTime_whole.push_back(ros::Time::now().toSec());
-					}
-				}
-			else
-			{
-				for (int i = 0; i < coSLAM.numCams; i++)
-				{
-					if (coSLAM.slam[i].m_camPos.size() > 0){
-						double org[3], rpy[3];
-						double vel[3];
-
-						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
-						double ts = cam->ts;
-						getCamCenter(cam, org);
-						coSLAM.transformCamPose2Global(cam, org, rpy);
-
-						if (!last_set){
-							vel[0] = 0;
-							vel[1] = 0;
-							ts_last = ts;
-							memcpy(org_last, org, 3 * sizeof(double));
-							ts_last = ts;
-							last_set = true;
-						}
-						else{
-							vel[0] = (org[0] - org_last[0]) / (ts - ts_last);
-							vel[1] = (org[1] - org_last[1]) / (ts - ts_last);
-							ts_last = ts;
-							memcpy(org_last, org, 3 * sizeof(double));
-						}
-
-						MyApp::redis[i]->setPose(ts, ros::Time::now().toSec(), org[0], vel[0], org[1], vel[1], rpy[2]);
-						rosTime_whole.push_back(ts);
-						rosTime_whole.push_back(ros::Time::now().toSec());
-					}
-				}
-			}
-		}
+//
+//						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+//						ts = cam->ts;
+//
+//		//				MyApp::redis_vel->getOdometryPose(vel);
+//						float x_vel, y_vel;
+//
+//						cv::Mat meas(2,1,CV_32F);
+//
+//						meas.at<float>(0,0) = rpy[i][2];
+//						meas.at<float>(1,0) = 0;
+//						posVelKF[i][2].updatePos(meas, ts, 0.1);
+//						double yaw = posVelKF[i][2].getPos();
+//						x_vel = vel * cos(yaw);
+//						y_vel = vel * sin(yaw);
+//
+//						meas.at<float>(0,0) = org[i][0];
+//						meas.at<float>(1,0) = x_vel;
+//						posVelKF[i][0].update(meas, ts);
+//
+//						meas.at<float>(0,0) = org[i][1];
+//						meas.at<float>(1,0) = y_vel;
+//						posVelKF[i][1].update(meas, ts);
+//
+//						ts_curr = ros::Time::now().toSec();
+//						MyApp::redis[i]->setPose(ts, ts_curr,
+//								posVelKF[i][0].getPredPos(ts_curr),
+//								posVelKF[i][0].getVel(),
+//								posVelKF[i][1].getPredPos(ts_curr),
+//								posVelKF[i][1].getVel(),
+//								posVelKF[i][2].getPredPos(ts_curr)
+//								);
+//
+//						printf("posx: %lf velx: %lf posy: %lf vely: %lf\n",
+//								posVelKF[i][0].getPredPos(ts_curr), posVelKF[i][0].getVel(),
+//								posVelKF[i][1].getPredPos(ts_curr),posVelKF[i][1].getVel());
+//
+//						rosTime_whole.push_back(ts);
+//						rosTime_whole.push_back(ros::Time::now().toSec());
+//					}
+//				}
+//			else
+//			{
+//				double org_all[SLAM_MAX_NUM][3];
+//				double rpy_all[SLAM_MAX_NUM][3];
+//				double neighbor_org_all[SLAM_MAX_NUM][3];
+//				double neighbor_rpy_all[SLAM_MAX_NUM][3];
+//
+//				for (int i = 0; i < coSLAM.numCams; i++)
+//				{
+//					if (coSLAM.slam[i].m_camPos.size() > 0){
+//						double org[3], rpy[3];
+////						double vel[3];
+//
+//						CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+//						double ts = cam->ts;
+//						getCamCenter(cam, org);
+//						coSLAM.transformCamPose2Global(cam, org, rpy);
+//
+//						org_all[i][0] = org[0];
+//						org_all[i][1] = org[1];
+//						org_all[i][2] = org[2];
+//
+//						rpy_all[i][0] = rpy[0];
+//						rpy_all[i][1] = rpy[1];
+//						rpy_all[i][2] = rpy[2];
+//
+//						//Compute the velocities
+////						if (!last_set){
+////							vel[0] = 0;
+////							vel[1] = 0;
+////							ts_last = ts;
+////							memcpy(org_last, org, 3 * sizeof(double));
+////							ts_last = ts;
+////							last_set = true;
+////						}
+////						else{
+////							vel[0] = (org[0] - org_last[0]) / (ts - ts_last);
+////							vel[1] = (org[1] - org_last[1]) / (ts - ts_last);
+////							ts_last = ts;
+////							memcpy(org_last, org, 3 * sizeof(double));
+////						}
+//
+////						MyApp::redis[i]->setPose(ts, ros::Time::now().toSec(), org[0], vel[0], org[1], vel[1], rpy[2]);
+//
+////						double targetPos[3];
+////						targetPos[0] = targetPos[1] = targetPos[2] = 0;
+////						double theta = 0;
+////						if(cam->dynObjPresent){
+////							coSLAM.transformTargetPos2Global(cam->currDynPos, targetPos);
+////							//printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+////							coSLAM.slam[i].projectTargetToCam(cam, cam->currDynPos);
+////							theta = atan2(coSLAM.slam[i]._targetPosInCam[0], coSLAM.slam[i]._targetPosInCam[2]);
+//////							double H = targetPos[2] * 2;
+//////							double Z = coSLAM.slam[i]._targetPosInCam[2];
+////							MyApp::redis[i]->setPoseTarget(ts, 1, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.35);
+////							printf("currDynPos: %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1], cam->currDynPos[2]);
+////						}
+////						else
+////							MyApp::redis[i]->setPoseTarget(ts, 0, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.35);
+////
+////						printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+////						printf("org[2]: %lf %lf %lf\n", org[0], org[1], rpy[2]);
+//
+//						rosTime_whole.push_back(ts);
+//						rosTime_whole.push_back(ros::Time::now().toSec());
+//					}
+//				}
+//				for (int i = 0; i < coSLAM.numCams; i++){
+//					double min_dist = 10000;
+//					int neighbor_id = -1;
+//					for (int j = 0; j < coSLAM.numCams; j++) {
+//						if (j != i){
+//							double dist = (org_all[i][0] - org_all[j][0]) * (org_all[i][0] - org_all[j][0]);
+//							dist += (org_all[i][1] - org_all[j][1]) * (org_all[i][1] - org_all[j][1]);
+//							dist += (org_all[i][2] - org_all[j][2]) * (org_all[i][2] - org_all[j][2]);
+//							dist = sqrt(dist);
+//							if (dist < min_dist){
+//								min_dist = dist;
+//								neighbor_id = j;
+//							}
+//						}
+//					}
+//					neighbor_org_all[i][0] = org_all[neighbor_id][0];
+//					neighbor_org_all[i][1] = org_all[neighbor_id][1];
+//					neighbor_org_all[i][2] = org_all[neighbor_id][2];
+//
+//					neighbor_rpy_all[i][0] = rpy_all[neighbor_id][0];
+//					neighbor_rpy_all[i][1] = rpy_all[neighbor_id][1];
+//					neighbor_rpy_all[i][2] = rpy_all[neighbor_id][2];
+//				}
+//			}
+//		}
 
 		ros::spinOnce();
 		loop_rate.sleep();
@@ -1133,15 +1220,15 @@ bool MyApp::OnInit() {
 	//For displaying icon
 //	wxPNGHandler* png = new wxPNGHandler;
 //	wxImage::AddHandler(png);
-
-  	if (!initOffline())
-  		return false;
+//
+//  	if (!initOffline())
+//  		return false;
 
 //  	if (!initROS())
 //  		return false;
 
-//  	if (!initROS_features())
-//  		return false;
+  	if (!initROS_features())
+  		return false;
 
 //
 // 	if (!initUSBCam())

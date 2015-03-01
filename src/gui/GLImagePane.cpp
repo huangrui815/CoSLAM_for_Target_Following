@@ -156,7 +156,7 @@ void GLImagePane::keyPressed(wxKeyEvent& event) {
 	else if (event.GetKeyCode() == 'O') {
 		MyApp::bStartMove = true;
 	}
-	else{
+	else if (event.GetKeyCode() == WXK_SPACE){
 		MyApp::bStop = !MyApp::bStop;
 	}
 }
@@ -317,10 +317,14 @@ void GLImagePane::drawFeaturePoints() {
 	float totalReprojErrStatic = 0;
 	float totalreprojErrDynamic = 0;
 
+	float averageDyn[2];
+	averageDyn[0] = 0;
+	averageDyn[1] = 0;
+
 	for (size_t k = 0; k < m_pFeatPts.size(); k++) {
 		FeaturePoint* p = m_pFeatPts[k];
-		float x0 = static_cast<float>(p->x);
-		float y0 = static_cast<float>(p->y);
+		float x0 = static_cast<float>(p->xo);
+		float y0 = static_cast<float>(p->yo);
 		float x, y;
 		//convert to image coordinate
 		convert2ImageCoords(x0, y0, x, y);
@@ -328,10 +332,11 @@ void GLImagePane::drawFeaturePoints() {
 		if (p->type != TYPE_FEATPOINT_DYNAMIC) {
 			glColor3f(COLOR_CORNER[0], COLOR_CORNER[1], COLOR_CORNER[2]);
 			drawCircle(x, y, radius, 5);
-		} else {
-			glColor3f(1.0f, 1.0f, 0.0f);
-			drawCircle(x, y, radius, 10);
 		}
+//		else {
+//			glColor3f(1.0f, 1.0f, 0.0f);
+//			drawCircle(x, y, radius, 10);
+//		}
 
 		if (p->mpt && p->mpt->numVisCam >= 1) {
 			//draw projections with corresponding map points
@@ -339,11 +344,14 @@ void GLImagePane::drawFeaturePoints() {
 			if (p->mpt->isCertainStatic())
 				glColor3f(0.0f, 1.0f, 0.0f);
 			else if (p->mpt->isFalse())
-				glColor3f(1.0f, 0.0f, 0.0f);
-			else if (p->mpt->isCertainDynamic())
+				glColor3f(1.0f, 1.0f, 1.0f);
+			else if (p->mpt->isCertainDynamic()){
 				glColor3f(0.0f, 0.0f, 1.0f);
+				averageDyn[0] += x;
+				averageDyn[1] += y;
+			}
 			else if (p->mpt->isUncertain())
-				glColor3f(1.0f, 1.0f, 0.0f);
+				glColor3f(1.0f, 0.0f, 0.0f);
 			//			} else if (p->mpt->flag == FLAG_MAPPOINT_TEST4) {
 			//				glColor3f(0.0f, 1.0f, 1.0f);
 			//				glLineWidth(2);
@@ -358,15 +366,15 @@ void GLImagePane::drawFeaturePoints() {
 			//			else if (p->mpt->flag == FLAG_MAPPOINT_TEST4)
 			//				glColor3f(1.0f, 1.0f, 0.0f);
 			//test
-			if (p->mpt->flag >= FLAG_MAPPOINT_TEST1) {
-				glColor3f(1.0f, 0.0f, 0.0f);
-				GLUquadric* quad = gluNewQuadric();
-				glTranslatef(x, y, 0);
-				gluDisk(quad, 0, p->mpt->numVisCam * 1.5 * radius, 30, 10);
-				glTranslatef(-x, -y, 0);
-				gluDeleteQuadric(quad);
-
-			}
+//			if (p->mpt->flag >= FLAG_MAPPOINT_TEST1) {
+//				glColor3f(1.0f, 0.0f, 0.0f);
+//				GLUquadric* quad = gluNewQuadric();
+//				glTranslatef(x, y, 0);
+//				gluDisk(quad, 0, p->mpt->numVisCam * 1.5 * radius, 30, 10);
+//				glTranslatef(-x, -y, 0);
+//				gluDeleteQuadric(quad);
+//
+//			}
 
 			if (p->mpt->isCertainDynamic())
 				glLineWidth(3.0f);
@@ -410,6 +418,12 @@ void GLImagePane::drawFeaturePoints() {
 			}
 		}
 	}
+
+	averageDyn[0] = averageDyn[0] / numOfDynamicPts;
+	averageDyn[1] = averageDyn[1] / numOfDynamicPts;
+	glLineWidth(5.0f);
+	glColor3f(0.0f, 1.0f, 0.0f);
+	drawCircle(averageDyn[0], averageDyn[1], 30, 10);
 
 	if (numOfStaticPts > 0)
 		MyApp::s_reprojErrStatic[m_camId].push_back(totalReprojErrStatic / numOfStaticPts);

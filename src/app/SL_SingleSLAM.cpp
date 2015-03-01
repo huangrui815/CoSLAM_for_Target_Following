@@ -59,6 +59,11 @@ void SingleSLAM::propagateFeatureStates() {
 		}
 	}
 }
+
+void SingleSLAM::projectTargetToCam(CamPoseItem* cam, double targetPos[3]){
+	projectToCamFrame(cam->R, cam->t, targetPos, _targetPosInCam);
+}
+
 int SingleSLAM::getStaticMappedTrackNodes(std::vector<Track2DNode*>& nodes) {
 	int k = 0;
 	for (int i = 0; i < m_tracker.m_nMaxCorners; i++) {
@@ -122,7 +127,7 @@ int SingleSLAM::getNumMappedFeatPts() {
 }
 int SingleSLAM::getNumMappedStaticPts() {
 	int curFrame = currentFrame();
-	printf("Try to get number of mapped static pts at frame: %d\n", curFrame);
+	//printf("Try to get number of mapped static pts at frame: %d\n", curFrame);
 
 	FeaturePoint* pHead = m_featPts.getFrameHead(curFrame);
 	assert(pHead);
@@ -379,7 +384,7 @@ void SingleSLAM::updateCamParamForFeatPts(const double* intrin,
 			p->setCameraPose(camPos);
 			k++;
 		}
-		printf("updateCamParamForFeatPts: %d (total %d) for frame %d\n", k, m_featPts.num,frame);
+		//printf("updateCamParamForFeatPts: %d (total %d) for frame %d\n", k, m_featPts.num,frame);
 	}
 }
 int SingleSLAM::chooseStaticFeatPts(std::vector<FeaturePoint*>& featPts) {
@@ -720,7 +725,7 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 		}
 	}
 
-	printf("poseUpdate3D: currentFrame(): %d\n", currentFrame());
+	//printf("poseUpdate3D: currentFrame(): %d\n", currentFrame());
 	CamPoseItem* camPos = m_camPos.add(currentFrame(), _ts, camId, R, t);
 	updateCamParamForFeatPts(K.data, camPos);
 
@@ -802,7 +807,7 @@ int SingleSLAM::detectDynamicFeaturePoints(int maxLen, int minLen,
 		int minOutNum, double maxEpiErr) {
 	std::vector<Track2DNode*> nodes;
 	getUnMappedAndDynamicTrackNodes(nodes, minLen);
-	printf("getUnMappedAndDynamicTrackNodes: The number of nodes %d\n", nodes.size());
+	//printf("getUnMappedAndDynamicTrackNodes: The number of nodes %d\n", nodes.size());
 	int k = 0;
 	for (size_t i = 0; i < nodes.size(); i++) {
 		FeaturePoint* fp = nodes[i]->pt;
