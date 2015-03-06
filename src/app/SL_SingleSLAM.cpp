@@ -33,7 +33,74 @@ SingleSLAM::SingleSLAM() :
 }
 SingleSLAM::~SingleSLAM() {
 }
+
+bool SingleSLAM::checkStaticMapPoints(){
+	m_tracker.klt_._flag_falseStatic.fill(1);
+	for (int i = 0; i < m_tracker.m_nMaxCorners; i++){
+		Track2D& tk = m_tracker.m_tks[i];
+		if (tk.empty())
+			continue;
+		Track2DNode* node = tk.tail;
+
+		if (node->pre != NULL) {
+			if (node->pt->mpt) {
+				MapPoint* mpt = node->pt->mpt;
+				FeaturePoint* fpt = 0;
+				Track2DNode* currNode = node;
+				double rm[2];
+				if (mpt->isCertainStatic()){
+					int iterNum = 0;
+					while (iterNum < 5 && currNode->f > mpt->firstFrame){
+						fpt = currNode->pt;
+						project(K.data, fpt->cam->R, fpt->cam->t,mpt->M,rm);
+						double repErr = dist2(fpt->m, rm);
+						if (repErr > 5){
+							mpt->setUncertain();
+//							m_tracker.klt_._flag_falseStatic[i] = -1;
+							break;
+						}
+						bool flag = false;
+						for (int j = 0; j < 5; j++){
+							currNode = currNode->pre;
+							if (!currNode){
+								flag = true;
+								break;
+							}
+						}
+						if (flag)
+							break;
+						iterNum++;
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
+
+bool SingleSLAM::checkStaticMapPoint(Track2DNode*node){
+	MapPoint* mpt = node->pt->mpt;
+	FeaturePoint* fpt = 0;
+	Track2DNode* currNode = node;
+	double rm[2];
+	if (mpt->isCertainStatic()){
+		fpt = currNode->pt;
+		for (int i = 0; i < mpt->staticFrameNum && i < 20; i++){
+			project(K.data, fpt->cam->R, fpt->cam->t,mpt->M,rm);
+			double repErr = dist2(fpt->m, rm);
+			if (repErr > 5){
+				mpt->setFalse();
+				return false;
+			}
+			currNode = currNode->pre;
+		}
+	}
+	return true;
+}
+
 void SingleSLAM::propagateFeatureStates() {
+//	m_tracker.klt_._flag_falseStatic.fill(1);
+
 	for (int i = 0; i < m_tracker.m_nMaxCorners; i++) {
 		Track2D& tk = m_tracker.m_tks[i];
 		if (tk.empty())
@@ -46,6 +113,10 @@ void SingleSLAM::propagateFeatureStates() {
 				MapPoint* pMapPt = node->pre->pt->mpt;
 				if (pMapPt->state != STATE_MAPPOINT_CURRENT)
 					continue;
+
+//				if (!checkStaticMapPoint(node->pre))
+//					m_tracker.klt_._flag_falseStatic[i] = -1;
+
 				//map correspondence propagation
 				if (!pMapPt->isFalse()) {
 					pMapPt->pFeatures[camId] = node->pt;
@@ -703,7 +774,8 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 
 //find outliers
 	int numOut = 0;
-	double errThres = largeErr ? 6.0 : 2.0;
+//	double errThres = largeErr ? 6.0 : 2.0;
+	double errThres = 2;
 	double rm[2], var[4], ivar[4];
 	for (int i = 0; i < num; i++) {
 		double* pM = nodes[i]->pt->mpt->M;
@@ -770,6 +842,129 @@ bool SingleSLAM::poseUpdate3D(const double* R0, const double* t0,
 		enterBACriticalSection();
 	}
 #endif
+	//return num;
+	return true;
+}
+
+bool SingleSLAM::poseUpdate3D_new(const double* R0, const double* t0,
+		double* R, double *t, bool largeErr) {
+	// propagate the feature points to current frame
+	propagateFeatureStates();
+
+	//get the feature points corresponding to the map points
+	std::vector<Track2DNode*> nodes;
+	int num = getStaticMappedTrackNodes(nodes);
+	int featNum = m_tracker.trackedFeatureNum_;
+
+	if ( num < std::min(SLAMParam::minMappedRatio * featNum, (float)5) ){
+		printf("num of mapped feature points (%d) < ratio (%f) * feature number (%d)\n",
+					num, SLAMParam::minMappedRatio, featNum);
+		//MyApp::coSLAM.pause();
+		return false;
+	}
+
+	//choose static feature points for pose estimation
+	std::vector<FeaturePoint*> featPts;
+	chooseStaticFeatPts(featPts);
+	std::vector<FeaturePoint*> mappedFeatPts;
+	mappedFeatPts.reserve(nRowBlk * nColBlk * 2);
+
+	for (size_t i = 0; i < featPts.size(); i++) {
+		if (featPts[i]->mpt)
+			mappedFeatPts.push_back(featPts[i]);
+	}
+
+	//get the 2D-3D corresponding points
+	int n3D2Ds = mappedFeatPts.size();
+	Mat_d ms(n3D2Ds, 2), Ms(n3D2Ds, 3), covs(n3D2Ds, 9);
+	for (int i = 0; i < n3D2Ds; i++) {
+		FeaturePoint* fp = mappedFeatPts[i];
+		ms.data[2 * i] = fp->x;
+		ms.data[2 * i + 1] = fp->y;
+
+		Ms.data[3 * i] = fp->mpt->x;
+		Ms.data[3 * i + 1] = fp->mpt->y;
+		Ms.data[3 * i + 2] = fp->mpt->z;
+
+		memcpy(covs.data, fp->mpt->cov, sizeof(double) * 9);
+	}
+
+	//Mat_d R(3, 3), t(3, 1);
+	double* cR = const_cast<double*>(R0);
+	double* cT = const_cast<double*>(t0);
+
+	IntraCamPoseOption opt;
+	intraCamEstimate(K.data, cR, cT, Ms.rows, 0, Ms.data, ms.data,
+			SLAMParam::maxErr, R, t, &opt);
+
+	Mat_d new_errs(n3D2Ds, 1);
+	for (int i = 0; i < n3D2Ds; i++) {
+		FeaturePoint* fp = mappedFeatPts[i];
+		double m[2];
+		project(K.data, R, t, fp->mpt->M, m);
+		new_errs[i] = dist2(m, fp->m);
+	}
+
+//find outliers
+	int numOut = 0;
+//	double errThres = largeErr ? 6.0 : 2.0;
+	double errThres = 2;
+	double rm[2], var[4], ivar[4];
+	for (int i = 0; i < num; i++) {
+		MapPoint* mpt = nodes[i]->pt->mpt;
+		double* pM = nodes[i]->pt->mpt->M;
+		double* pCov = nodes[i]->pt->mpt->cov;
+		project(K, R, t, pM, rm);
+		getProjectionCovMat(K, R, t, pM, pCov, var, Const::PIXEL_ERR_VAR);
+		mat22Inv(var, ivar);
+		double err = mahaDist2(rm, nodes[i]->pt->m, ivar);
+		if (err < errThres) { //inlier
+			nodes[i]->pt->reprojErr = err;
+			seqTriangulate(K, R, t, nodes[i]->pt->m, pM, pCov,
+					Const::PIXEL_ERR_VAR);
+		} else {
+			//outliers
+			numOut++;
+			double repErr = dist2(rm, nodes[i]->pt->m);
+			nodes[i]->pt->reprojErr = repErr;
+			nodes[i]->pt->mpt->setUncertain();
+		}
+
+		if (nodes[i]->pre){
+			Track2DNode* currNode = nodes[i]->pre;
+			CamPoseItem* currCam = 0;
+			int iterNum = 0;
+			while (currNode->f > mpt->firstFrame){
+				if (iterNum == 5)
+					break;
+
+				currCam = currNode->pt->cam;
+				project(K.data,currCam->R, currCam->t, pM, rm);
+				double repErr = dist2(rm, currNode->pt->m);
+				if (repErr > 3){
+					numOut++;
+					nodes[i]->pt->reprojErr = repErr;
+					nodes[i]->pt->mpt->setUncertain();
+					break;
+				}
+				bool flag = false;
+				for (int k = 0; k <10; k++){
+					currNode = currNode->pre;
+					if (!currNode){
+						flag = true;
+						break;
+					}
+				}
+				if (flag)
+					break;
+				iterNum++;
+			}
+		}
+	}
+
+	//printf("poseUpdate3D: currentFrame(): %d\n", currentFrame());
+	CamPoseItem* camPos = m_camPos.add(currentFrame(), _ts, camId, R, t);
+	updateCamParamForFeatPts(K.data, camPos);
 	//return num;
 	return true;
 }

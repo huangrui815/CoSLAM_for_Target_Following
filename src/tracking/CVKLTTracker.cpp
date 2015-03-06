@@ -50,7 +50,7 @@ void CVKLTTracker::_genPointMask(ImgG& mask) {
 		if (_flag[i] >= 0) {
 			cv::circle(cvMask,
 					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
-					25, cv::Scalar(0), -1);
+					35, cv::Scalar(0), -1);
 		}
 	}
 }
@@ -77,6 +77,9 @@ void CVKLTTracker::open(int width, int height, int blkWidth /* = 12 */,int minDi
 	_featPts.resize(KLT_MAX_FEATURE_NUM, 2);
 
 	_flag.resize(KLT_MAX_FEATURE_NUM, 1);
+	_flag_falseStatic.resize(KLT_MAX_FEATURE_NUM, 1);
+	_flag_falseStatic.fill(1);
+
 	_flagMapped.resize(KLT_MAX_FEATURE_NUM, 1);
 	_flagMapped.fill(0);
 	_numMappedTracks = 0;
@@ -219,7 +222,8 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		if (flowDist >= _trackingDistanceConstraint)
 			numFlow++;
 
-		if (status[i] != 0 && flowDist < _trackingDistanceConstraint/*&& cvErr[k] < _maxErr*/) {
+		if (status[i] != 0 && flowDist < _trackingDistanceConstraint/*&& cvErr[k] < _maxErr*/
+				&& _flag_falseStatic[ii] > 0) {
 			_featPts.data[2 * ii] = points[1][i].x;
 			_featPts.data[2 * ii + 1] = points[1][i].y;
 			pts2trackId[k] = ii;

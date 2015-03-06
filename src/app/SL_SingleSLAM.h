@@ -90,6 +90,9 @@ public:
 	int currentFrame() {
 		return m_tracker.currentFrame();
 	}
+
+	bool checkStaticMapPoints();
+	bool checkStaticMapPoint(Track2DNode*node);
 	void propagateFeatureStates();
 
 	double _targetPosInCam[3];
@@ -151,6 +154,8 @@ public:
 	 */
 	bool poseUpdate3D(const double* R0, const double* t0,
 			double* R, double *t, bool largeErr);
+	bool poseUpdate3D_new(const double* R0, const double* t0,
+			double* R, double *t, bool largeErr);
 
 	/**
 	 * compute the camera pose using both the 3D-2D and 2D-2D correspondences
@@ -190,7 +195,8 @@ public:
 	/**
 	 * triangulate new map points
 	 */
-	int newMapPoints(std::vector<MapPoint*>& mapPts, double maxEpiErr = 2.0,
+	//Change the maxEpiErr by Rui Mar 2 2015
+	int newMapPoints(std::vector<MapPoint*>& mapPts, double maxEpiErr = 5.0,
 			double maxNcc = 0.75);
 	/* refine the map point*/
 	void refineTriangulation(const FeaturePoint* fp, double M[3],

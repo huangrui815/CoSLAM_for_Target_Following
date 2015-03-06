@@ -397,6 +397,8 @@ bool CoSLAM::calibGlobal2Cam(){
 	geometry_msgs::PoseStamped poses;
 	cv::Point2f imgLocs;
 	int numMarkers = 4;
+	int numCams = 2;
+
 	Mat_d ms(numCams, 2);
 	Mat_d nms(numCams, 2);
 	Mat_d Ks(numCams, 9);
@@ -776,7 +778,10 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 
 	enterBACriticalSection();
 //	mapPointsClassify(12.0);
-	mapPointsClassify(10.0);
+	mapPointsClassify(3.0);
+	for (int i = 0; i < numCams; i++){
+		slam[i].checkStaticMapPoints();
+	}
 	leaveBACriticalSection();
 	m_tmMapClassify = tm.toc();
 }
@@ -801,7 +806,7 @@ void CoSLAM::parallelPoseUpdate(bool* bEstPose, bool largeErr) {
 	}
 	for (int i = 0; i < numCams; i++) {
 		if (state[i] == SLAM_STATE_NORMAL){
-			bEstPose[i] = slam[i].poseUpdate3D(slam[i].m_camPos.current()->R,
+			bEstPose[i] = slam[i].poseUpdate3D_new(slam[i].m_camPos.current()->R,
 							slam[i].m_camPos.current()->t, R, t, largeErr);
 			if(!bEstPose[i])
 				startRelocalization(i);
@@ -829,6 +834,7 @@ void CoSLAM::parallelPoseUpdate(bool* bEstPose, bool largeErr) {
 //#endif
 }
 void CoSLAM::mapPointsClassify(double pixelVar) {
+
 	MapPoint* pCurMapHead = curMapPts.getHead();
 	if (!pCurMapHead)
 	{
@@ -2896,12 +2902,15 @@ void CoSLAM::storeDynamicPoints() {
 	double dynPtsCenter[3];
 	dynPtsCenter[0] = dynPtsCenter[1] = dynPtsCenter[2] = 0;
 
+	vector<MapPoint*> mptVec;
+
 	for (MapPoint* mpt = curMapPts.getHead(); mpt; mpt = mpt->next) {
 		if (mpt->isCertainDynamic()) {
 			pts.push_back(Point3dId(mpt->x, mpt->y, mpt->z, mpt->id));
 			dynPtsCenter[0] += mpt->x;
 			dynPtsCenter[1] += mpt->y;
 			dynPtsCenter[2] += mpt->z;
+			mptVec.push_back(mpt);
 //			printf("%lf, %lf, %lf\n", mpt->x, mpt->y, mpt->z);
 		}
 	}
@@ -2961,8 +2970,25 @@ void CoSLAM::storeDynamicPoints() {
 				minId = i;
 			}
 		}
+
+//		double aveMinSum = minSum / (pts.size() - 1);
+//		if(prevPoseSet){
+//			for (int i = 0; i < pts.size(); i++){
+//				if (dist3(prevPose, pts[i].M) > aveMinSum*2.3){
+//					mptVec[i]->setFalse();
+//				}
+//			}
+//		}
+
+		if(prevPoseSet){
+			for (int i = 0; i < pts.size(); i++){
+				if (dist3(prevPose, pts[i].M)*scale_global2Cam > 1.5){
+					mptVec[i]->setFalse();
+				}
+			}
+		}
 //
-		double prevWeight = 0.9;
+		double prevWeight = 0.90;
 		double pose[3];
 		if (!prevPoseSet){
 			prevPose[0] = pts[minId].x;
@@ -2974,12 +3000,26 @@ void CoSLAM::storeDynamicPoints() {
 			prevPoseSet = true;
 		}
 		else{
-			pose[0] = prevWeight * prevPose[0] + (1 - prevWeight) * pts[minId].x;
-			pose[1] = prevWeight * prevPose[1] + (1 - prevWeight) * pts[minId].y;
-			pose[2] = prevWeight * prevPose[2] + (1 - prevWeight) * pts[minId].z;
-			prevPose[0] = pose[0];
-			prevPose[1] = pose[1];
-			prevPose[2] = pose[2];
+//			double distChanged = 0;
+//			distChanged += pow(pts[minId].x - prevPose[0], 2);
+//			distChanged += pow(pts[minId].y - prevPose[1], 2);
+//			distChanged += pow(pts[minId].z - prevPose[2], 2);
+//			distChanged = sqrt(distChanged);
+
+//			if (distChanged < 2.0){
+				pose[0] = prevWeight * prevPose[0] + (1 - prevWeight) * pts[minId].x;
+				pose[1] = prevWeight * prevPose[1] + (1 - prevWeight) * pts[minId].y;
+				pose[2] = prevWeight * prevPose[2] + (1 - prevWeight) * pts[minId].z;
+				prevPose[0] = pose[0];
+				prevPose[1] = pose[1];
+				prevPose[2] = pose[2];
+//			}
+//			else
+//			{
+//				pose[0] = prevPose[0];
+//				pose[1] = prevPose[1];
+//				pose[2] = prevPose[2];
+//			}
 		}
 
 		dynObjPos[0] = pose[0];

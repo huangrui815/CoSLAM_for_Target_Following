@@ -185,6 +185,10 @@ CoSLAMThread::ExitCode CoSLAMThread::Entry() {
 		if (ROSMain_features()) {
 			MyApp::exitProgram();
 		}
+	} else if (MyApp::runMode == RUN_MODE_ROS_FEATURES_3CAM) {
+		if (ROSMain_features()) {
+			MyApp::exitProgram();
+		}
 	}
 //	else if (MyApp::runMode == RUN_MODE_ROS_ARDRONE) {
 //		if (ardroneROSMain()) {

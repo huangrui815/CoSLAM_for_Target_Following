@@ -197,6 +197,57 @@ void getCurTimeString(char* timeStr) {
 	strftime(timeStr, 256, "%y-%m-%d=%H-%M", timeinfo);
 }
 
+int MyApp::readScript(string& filePath){
+	FILE* fid = fopen(filePath.c_str(), "r");
+	if (fid == NULL){
+		printf("cannot open the file\n");
+		return -1;
+	}
+
+	char* fgetsFlag = 0;
+	char str[100];
+	string prevLine;
+	string modeStr("mode");
+	string videoStr("video path");
+	string calibrationStr("calibration files");
+	string skippedStr("skipped frames");
+
+	while (1){
+		fgetsFlag = fgets(str, 100, fid);
+		if (fgetsFlag == NULL){
+			break;
+		}
+		string s = str;
+		if (s[s.size()-1] == '\n')
+			s.erase(s.size()-1,1);
+
+		if (str[0] == '#'){
+			prevLine = s;
+			prevLine.erase(0,1);
+			printf("%s\n", prevLine.c_str());
+		}
+		else{
+			if (prevLine.compare(modeStr) == 0 && s.size() > 0){
+				mModeStr = s;
+				printf("%s\n", mModeStr.c_str());
+			}
+			else if (prevLine.compare(videoStr) == 0 && s.size() >0){
+				SLAMParam::videoFilePath.push_back(s);
+				printf("%s\n", SLAMParam::videoFilePath.back().c_str());
+			}
+			else if (prevLine.compare(calibrationStr) == 0 && s.size() > 0){
+				SLAMParam::camFilePath.push_back(s);
+				printf("%s\n", SLAMParam::camFilePath.back().c_str());
+			}
+			else if (prevLine.compare(skippedStr) == 0 && s.size() >> 0){
+				mStartFrame.push_back(atoi(s.c_str()));
+				printf("%d\n", mStartFrame.back());
+			}
+		}
+	}
+	return 0;
+}
+
 bool MyApp::initOffline() {
 	initSyncVars();
 	glutInit(&argc, argv);
@@ -205,91 +256,20 @@ bool MyApp::initOffline() {
 	app = this;
 	MyApp::runMode = RUN_MODE_OFFLINE;
 
-//	mainDlg = new MainDlg(0);
-//	if (mainDlg->ShowModal() != wxID_OK)
-//		return false;
-
 	getCurTimeString(timeStr);
 
-//	Param::videoFilePath.push_back("/home/rui/workspace/calibrations/logiCam01.avi");
-//	Param::videoFilePath.push_back("/home/rui/workspace/calibrations/logiCam02.avi");
-////	Param::videoFilePath.push_back("/home/rui/workspace/motion_capture_data/0595_out.mp4");
+//	SLAMParam::videoFilePath.push_back("/home/rui/workspace/coslam/slam_results/15-03-02=20-48/video0.avi");
+//	SLAMParam::videoFilePath.push_back("/home/rui/workspace/coslam/slam_results/15-03-02=20-48/video1.avi");
 //
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/logiCam.txt");
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/logiCam.txt");
-
-//	Param::videoFilePath.push_back(
-////			"/home/rui/workspace/calibrations/logiCam01.avi");
-//			"/home/rui/workspace/motion_capture_data/0578_out.mp4");
-//	Param::videoFilePath.push_back(
-////			"/home/rui/workspace/calibrations/logiCam02.avi");
-//			"/home/rui/workspace/motion_capture_data/0587_out.mp4");
-//	Param::videoFilePath.push_back(
-////			"/home/rui/workspace/calibrations/logiCam02.avi");
-//			"/home/rui/workspace/motion_capture_data/0595_out.mp4");
-	//Param::videoFilePath.push_back("/media/WIND_DATA/CoSLAM_video/indoor_01/056_syn.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/Kaimo data/187/Camera01/960/01.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/Kaimo data/187/Camera02/960/02.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/Kaimo data/187/Camera03/960/03.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/Kaimo data/187/Camera04/960/04.avi");
-
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data79_square/video.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data80_square/video.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data77/video.avi");
-
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/camfeeds/v1_selected.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/camfeeds/v2_selected.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/camfeeds/v3_selected.avi");
-
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
-//	Param::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_6.avi");
+//	SLAMParam::camFilePath.push_back(
+//			"/home/rui/workspace/calibrations/logitech_ball.txt");
+//	SLAMParam::camFilePath.push_back(
+//			"/home/rui/workspace/calibrations/logitech_ball.txt");
 //
-//	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video0.avi");
-//	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/test_multiple_cam4/video1.avi");
-	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/dynamic09/video0.avi");
-	SLAMParam::videoFilePath.push_back("/home/rui/rosbuild_ws/myROS/test_multiple_cam/dynamic09/video1.avi");
-
-//	SLAMParam::videoFilePath.push_back("/media/rui/Data/SFM_data/ARDrone/flight_data_pc/data59/video.avi");
-
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/0578_cal_new.txt");
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/0578_cal_new.txt");
-//	Param::camFilePath.push_back(
-//			"/home/rui/workspace/calibrations/0578_cal_new.txt");
-//	Param::camFilePath.push_back(
-//			"/media/rui/Data/SFM_data/Kaimo data/187/Camera01/960/intrinsics.txt");
-//	Param::camFilePath.push_back(
-//			"/media/rui/Data/SFM_data/Kaimo data/187/Camera02/960/intrinsics.txt");
-//	Param::camFilePath.push_back(
-//				"/media/rui/Data/SFM_data/Kaimo data/187/Camera03/960/intrinsics.txt");
-//	Param::camFilePath.push_back(
-//				"/media/rui/Data/SFM_data/Kaimo data/187/Camera04/960/intrinsics.txt");
-	
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
-//	SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/ardrone_cam3.txt");
-
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/chatterbox.txt");
-
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-//	Param::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
-
-	SLAMParam::camFilePath.push_back(
-			"/home/rui/workspace/calibrations/odroid.txt");
-	SLAMParam::camFilePath.push_back(
-			"/home/rui/workspace/calibrations/odroid.txt");
-
-	vector<int> startFrame;
-
-	startFrame.push_back(500);
-	startFrame.push_back(500);
+//	vector<int> startFrame;
+//
+//	startFrame.push_back(45 *25);
+//	startFrame.push_back(45 *25);
 
 
 	SLAMParam::nInitFrame = 0;
@@ -300,16 +280,8 @@ bool MyApp::initOffline() {
 
 	for (size_t i = 0; i < SLAMParam::videoFilePath.size(); ++i) {
 		coSLAM.addVideo(SLAMParam::videoFilePath[i].c_str(),
-				SLAMParam::camFilePath[i].c_str(), startFrame[i]);
+				SLAMParam::camFilePath[i].c_str(), mStartFrame[i]);
 	}
-
-//	coSLAM.addVideo(Param::videoFilePath[2].c_str(),
-//			Param::camFilePath[0].c_str(),
-//			Param::nSkipFrame);
-//
-//	coSLAM.addVideo(GlobParam::Ref().m_videoFilePath[3].c_str(),
-//			GlobParam::Ref().m_camFilePath[0].c_str(),
-//			GlobParam::Ref().m_nSkipFrame);
 
 	coSLAM.setInitFrame(SLAMParam::nInitFrame);
 
@@ -556,6 +528,7 @@ bool MyApp::initROS_features() {
 			"/home/rui/workspace/calibrations/logitech_ball.txt");
 	SLAMParam::camFilePath.push_back(
 			"/home/rui/workspace/calibrations/logitech_ball.txt");
+
 //	SLAMParam::camFilePath.push_back(
 //			"/home/rui/workspace/calibrations/odroid.txt");
 
@@ -588,14 +561,139 @@ bool MyApp::initROS_features() {
 	}
 
 	// Initialize the ROS node
-	MyApp::redis[0] = new CBRedisClient("odroid01", "192.168.1.137", 6379);
-	MyApp::redis[1] = new CBRedisClient("odroid03", "192.168.1.137", 6379);
+	MyApp::redis[0] = new CBRedisClient("odroid04", "192.168.1.137", 6379);
+	MyApp::redis[1] = new CBRedisClient("odroid05", "192.168.1.137", 6379);
 	MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
 	MyApp::redis_vel = new CBRedisClient("vel", "192.168.1.137", 6379);
 	MyApp::redis_dynObj = new CBRedisClient("target", "192.168.1.137", 6379);
 
 	videoNodeInit();
 	featureNodeInit();
+	arMarkerNodeInit();
+
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	pthread_create(&_nodeThread, &attr, threadProc, this);
+
+	preWaitCreateGUI();
+
+	//create main thread
+	coSlamThread = new CoSLAMThread();
+	coSlamThread->Create();
+	coSlamThread->Run();
+
+	waitCreateGUI();
+
+	if (!bInitSucc) {
+		wxMessageBox("Initialization failed!");
+		return false;
+	}
+	modelWnd1 = new GLSceneWnd("model window1", 0, 0, 800, 450);
+	if (modelWnd1->glPane->load("scene1_display.txt"))
+		modelWnd1->glPane->m_autoScale = false;
+	else
+		modelWnd1->glPane->m_autoScale = true;
+	modelWnd1->glPane->m_pointSize = 0.5;
+//	modelWnd1->Show();
+
+	modelWnd2 = new GLSceneWnd("model window2", 600, 0, 800, 450);
+	modelWnd2->glPane->load("scene2_display.txt");
+	modelWnd2->glPane->m_autoScale = false;
+	modelWnd2->glPane->m_camView = true;
+	modelWnd2->glPane->m_followCamId = 0;
+//	modelWnd2->Show();
+
+	char wndName[256];
+	for (int i = 0; i < coSLAM.numCams; i++) {
+		int W = coSLAM.slam[i].videoReader->_w;
+		int H = coSLAM.slam[i].videoReader->_h;
+		int Ws = W * videoWndScale;
+		int Hs = H * videoWndScale;
+		sprintf(wndName, "video %d", i);
+		videoWnd[i] = new GLImageWnd(wndName, 300 + i * Ws, 600, Ws, Hs);
+		videoWnd[i]->initVideoFrame(W, H);
+//		videoWnd[i]->Show();
+	}
+	//finish creating GUIs, broadcast the CoSLAMThread to start SLAM
+	broadcastCreateGUI();
+	waitCreateGUI();
+	modelWnd1->Show();
+	modelWnd2->Show();
+	for (int i = 0; i < coSLAM.numCams; i++){
+		videoWnd[i]->Show();
+	}
+	modelWnd1->SetFocus();
+	return true;
+}
+
+
+bool MyApp::initROS_features_3cam() {
+	initSyncVars();
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
+	glEnable(GL_MULTISAMPLE);
+	app = this;
+	MyApp::runMode = RUN_MODE_ROS_FEATURES_3CAM;
+
+	getCurTimeString(timeStr);
+
+#ifdef WIN32
+	SLAMParam::camFilePath.push_back(
+				"/home/rui/workspace/calibrations/0578_cal.txt");
+	SLAMParam::camFilePath.push_back(
+					"/home/rui/workspace/calibrations/0578_cal.txt");
+#else
+//	SLAMParam::camFilePath.push_back(
+//				"/home/rui/workspace/calibrations/asusCam.txt");
+	SLAMParam::camFilePath.push_back(
+			"/home/rui/workspace/calibrations/logitech_ball.txt");
+	SLAMParam::camFilePath.push_back(
+			"/home/rui/workspace/calibrations/logitech_ball.txt");
+	SLAMParam::camFilePath.push_back(
+			"/home/rui/workspace/calibrations/logitech_ball.txt");
+
+//	SLAMParam::camFilePath.push_back(
+//			"/home/rui/workspace/calibrations/odroid.txt");
+
+//		SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+//		SLAMParam::camFilePath.push_back("/home/rui/workspace/calibrations/nexus5.txt");
+#endif
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_4.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/test3/v1_5.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video0.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
+//		SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/ros_data/test3/video1.avi");
+
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video0_merge.avi");
+	SLAMParam::videoFilePath.push_back("/media/rui/Data/Chatterbox_Data/merge_test/video1_merge.avi");
+
+		_camNum = SLAMParam::camFilePath.size();
+
+	SLAMParam::SSD_Threshold = 20000; //20000;
+	SLAMParam::minCornerness = 550; //800;
+
+	for (size_t i = 0; i < SLAMParam::camFilePath.size(); ++i) {
+		coSLAM.addCam(SLAMParam::camFilePath[i].c_str());
+//		coSLAM.addVideo(SLAMParam::videoFilePath[i].c_str(),
+//					SLAMParam::camFilePath[i].c_str());
+//		_cap[i].open(SLAMParam::videoFilePath[i]);
+		int camId = i + 1;
+		MyApp::rosReader[i]._camid = camId;
+		coSLAM.slam[i].videoReader = &MyApp::rosReader[i];
+//		coSLAM.slam[i].videoReader->open();
+	}
+
+	// Initialize the ROS node
+	MyApp::redis[0] = new CBRedisClient("odroid04", "192.168.1.137", 6379);
+	MyApp::redis[1] = new CBRedisClient("odroid05", "192.168.1.137", 6379);
+	MyApp::redis[2] = new CBRedisClient("odroid06", "192.168.1.137", 6379);
+	MyApp::redis_start = new CBRedisClient("Start", "192.168.1.137", 6379);
+	MyApp::redis_vel = new CBRedisClient("vel", "192.168.1.137", 6379);
+	MyApp::redis_dynObj = new CBRedisClient("target", "192.168.1.137", 6379);
+
+	videoNodeInit_3Cam();
+	featureNodeInit_3Cam();
 	arMarkerNodeInit();
 
 	pthread_attr_t attr;
@@ -786,7 +884,7 @@ void MyApp::subCB_3_videos(const sensor_msgs::ImageConstPtr &img1,
 	}
 
 	//pthread_mutex_lock(&_mutexImg);
-	if (MyApp::rosReader[0]._imgs.size() > 10)
+	if (MyApp::rosReader[0]._imgs.size() > 10 * 60 * 30)
 	{
 		for (int i = 0; i < 3; i++){
 		MyApp::rosReader[i]._imgs.pop_front();
@@ -941,6 +1039,56 @@ void MyApp::featureNodeInit(){
 				sub_features[0], sub_features[1]);
 		featuresSync->registerCallback(boost::bind(&MyApp::subCB_two_features, this, _1, _2));
 }
+
+
+void MyApp::videoNodeInit_3Cam(){
+	_it = new image_transport::ImageTransport(_nh);
+//	sub_video[0].subscribe(*_it, "/gonk_usb_cam/image_raw", 100);
+//	sub_video[1].subscribe(*_it, "/kitt_usb_cam/image_raw", 100);
+
+	sub_video[0].subscribe(*_it, "/coslam_feature_tracker04/image_raw", 10);
+	sub_video[1].subscribe(*_it, "/coslam_feature_tracker05/image_raw", 10);
+	sub_video[2].subscribe(*_it, "/coslam_feature_tracker06/image_raw", 10);
+
+//	sub[0] = _it->subscribe("/coslam_feature_tracker04/image_raw", 10, MyApp::subCB_video01);
+//	sub[1] = _it->subscribe("/coslam_feature_tracker05/image_raw", 10, MyApp::subCB_video02);
+
+	_imgReady[0] = false;
+	_imgReady[1] = false;
+	_imgReady[2] = false;
+//	sub_video[2].subscribe(*_it, "/coslam_feature_tracker3/image_raw", 10);
+
+
+//	videoSync = new message_filters::Synchronizer< videoSyncPolicy >(videoSyncPolicy(10), sub_video[0], sub_video[1], sub_video[2]);
+//	videoSync->registerCallback(boost::bind(&MyApp::subCB_3_videos, this, _1, _2, _3));
+
+	videoSync_3Cam = new message_filters::Synchronizer< videoSyncPolicy_3Cam >
+	(videoSyncPolicy_3Cam(10), sub_video[0], sub_video[1], sub_video[2]);
+	videoSync_3Cam->registerCallback(boost::bind(&MyApp::subCB_3_videos, this, _1, _2, _3));
+}
+
+void MyApp::featureNodeInit_3Cam(){
+	pub_mapInit = _nh.advertise<std_msgs::Byte>("/mapInit", 10);
+	pub_triggerClients = _nh.advertise<std_msgs::Byte>("/trigger",1);
+
+//	for (int i = 0; i <_camNum; i++){
+		pub_features[0] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker04/init_features",10);
+		pub_features[1] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker05/init_features",10);
+		pub_features[2] = _nh.advertise<coslam_feature_tracker::features>("/coslam_feature_tracker06/init_features",10);
+
+		sub_features[0].subscribe(_nh, "/coslam_feature_tracker04/features", 10);
+		sub_features[1].subscribe(_nh, "/coslam_feature_tracker05/features", 10);
+		sub_features[2].subscribe(_nh, "/coslam_feature_tracker06/features", 10);
+//	}
+
+//	featuresSync = new message_filters::Synchronizer< featuresSyncPolicy >(featuresSyncPolicy(10),
+//			sub_features[0], sub_features[1], sub_features[2]);
+//	featuresSync->registerCallback(boost::bind(&MyApp::subCB_3_features, this, _1, _2, _3));
+		featuresSync_3Cam = new message_filters::Synchronizer< featuresSyncPolicy_3Cam >
+		(featuresSyncPolicy_3Cam(10),sub_features[0], sub_features[1], sub_features[2]);
+		featuresSync_3Cam->registerCallback(boost::bind(&MyApp::subCB_3_features, this, _1, _2, _3));
+}
+
 
 void MyApp::subCB_2_marker_pose(const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers0,
 			const ar_track_alvar_msgs::AlvarMarkersConstPtr &markers1){
@@ -1221,25 +1369,25 @@ bool MyApp::OnInit() {
 //	wxPNGHandler* png = new wxPNGHandler;
 //	wxImage::AddHandler(png);
 //
-//  	if (!initOffline())
-//  		return false;
+	string scriptPath("/home/rui/rosbuild_ws/myROS/coslam_gs/src/script.txt");
+	readScript(scriptPath);
 
-//  	if (!initROS())
-//  		return false;
-
-  	if (!initROS_features())
-  		return false;
-
-//
-// 	if (!initUSBCam())
-// 		return false;
-
-//	if(!initARDrone())
-//	  return false;
-
-//	if(!initRosARDrone())
-//		return false;
-
+	if (mModeStr.compare("offline") == 0){
+		if (!initOffline())
+			return false;
+	}
+	else if(mModeStr.compare("online2Cam") == 0){
+		if (!initROS_features())
+	  		return false;
+	}
+	else if(mModeStr.compare("online3Cam") == 0){
+	  	if (!initROS_features_3cam())
+	  	  	return false;
+	}
+	else if(mModeStr.compare("usbCam") == 0){
+		if (!initUSBCam())
+			return false;
+	}
 	activateRenderLoop(true);
 	return true;
 }

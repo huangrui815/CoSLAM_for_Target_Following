@@ -260,7 +260,7 @@ bool ROSMain_features() {
 //							double H = targetPos[2] * 2;
 //							double Z = coSLAM.slam[i]._targetPosInCam[2];
 						MyApp::redis[i]->setPoseTarget(ts, 1, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.9);
-						MyApp::redis_dynObj->setDynObj(targetPos[0], targetPos[1], targetPos[2]);
+						MyApp::redis_dynObj->setDynObj(targetPos[0], targetPos[1], 0.9);
 //						printf("currDynPos: %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1], cam->currDynPos[2]);
 					}
 					else

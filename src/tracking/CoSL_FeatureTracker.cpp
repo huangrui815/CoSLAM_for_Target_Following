@@ -917,7 +917,7 @@ int FeatureTracker::next(const unsigned char* imgData, FeaturePoints& ips) {
 	frame_++;
 	Mat_d pts;
 	Mat_i flag;
-	const int nTrackedFrames = 10;
+	const int nTrackedFrames = 5;
 
 	int trackRes = 0;
 	if (frame_ % nTrackedFrames == 0)

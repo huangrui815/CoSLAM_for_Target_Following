@@ -44,6 +44,7 @@
 #define RUN_MODE_ONLINE_MINI_CAM 3
 #define RUN_MODE_ROS 4
 #define RUN_MODE_ROS_FEATURES 5
+#define RUN_MODE_ROS_FEATURES_3CAM 5
 
 #define MAX_NUM_MARKERS 18
 
@@ -56,6 +57,7 @@ protected:
 	bool initUSBCam();
 	bool initROS();
 	bool initROS_features();
+	bool initROS_features_3cam();
 	virtual int OnExit();
 	virtual bool OnInit();
 
@@ -92,6 +94,17 @@ public:
 	message_filters::Synchronizer< featuresSyncPolicy > *featuresSync;
 
 	typedef message_filters::sync_policies::ApproximateTime<
+		sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> videoSyncPolicy_3Cam;
+	message_filters::Synchronizer< videoSyncPolicy_3Cam > *videoSync_3Cam;
+
+//	typedef message_filters::sync_policies::ApproximateTime<
+//			coslam_feature_tracker::features, coslam_feature_tracker::features,coslam_feature_tracker::features> featuresSyncPolicy;
+	typedef message_filters::sync_policies::ApproximateTime<
+				coslam_feature_tracker::features,coslam_feature_tracker::features,
+				coslam_feature_tracker::features> featuresSyncPolicy_3Cam;
+	message_filters::Synchronizer< featuresSyncPolicy_3Cam > *featuresSync_3Cam;
+
+	typedef message_filters::sync_policies::ApproximateTime<
 				ar_track_alvar_msgs::AlvarMarkers,
 				ar_track_alvar_msgs::AlvarMarkers> markerPoseSyncPolicy;
 	message_filters::Synchronizer< markerPoseSyncPolicy > *markerPoseSync;
@@ -109,6 +122,8 @@ public:
 	static void triggerClients();
 	void videoNodeInit();
 	void featureNodeInit();
+	void videoNodeInit_3Cam();
+	void featureNodeInit_3Cam();
 	void arMarkerNodeInit();
 	static void markerPose2ImageLoc(geometry_msgs::PoseStamped& poses,
 			cv::Point2f& imgLocs, double K[9]);
@@ -130,6 +145,11 @@ public:
 
 	static void subCB_video01(const sensor_msgs::ImageConstPtr &img);
 	static void subCB_video02(const sensor_msgs::ImageConstPtr &img);
+
+	int readScript(string& filePath);
+
+	vector<int> mStartFrame;
+	string mModeStr;
 
 
 	// Create redis clients to send command
