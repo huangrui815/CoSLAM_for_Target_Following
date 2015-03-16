@@ -6,7 +6,7 @@
 
 typedef float slfloat;
 using namespace std;
-#define KLT_MAX_FEATURE_NUM 750// 2 cams
+#define KLT_MAX_FEATURE_NUM 1500// 2 cams
 //#define KLT_MAX_FEATURE_NUM 500// 3 cams
 
 class CVKLTTracker : public BaseKLTTracker{

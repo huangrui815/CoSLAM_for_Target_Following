@@ -92,6 +92,7 @@ public:
 	}
 
 	bool checkStaticMapPoints();
+
 	bool checkStaticMapPoint(Track2DNode*node);
 	void propagateFeatureStates();
 

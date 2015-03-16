@@ -20,7 +20,7 @@ CVKLTTracker::CVKLTTracker(){
 	                             // 400; for ardrone video (630 x 360)
 //		_detector = new cv::BRISK();
 //		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(512, 0.01, 30, 3, 0, 0.04);
-		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 30, 3, 0, 0.04);
+		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 3, 3, 0, 0.04);
 		_detector = new cv::FastFeatureDetector(30, true);
 //		_detector = new cv::StarFeatureDetector();
 //	_detector = new cv::OrbFeatureDetector(KLT_MAX_FEATURE_NUM);
@@ -48,9 +48,12 @@ void CVKLTTracker::_genPointMask(ImgG& mask) {
 
 	for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++) {
 		if (_flag[i] >= 0) {
+//			cv::circle(cvMask,
+//					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
+//					35, cv::Scalar(0), -1);
 			cv::circle(cvMask,
 					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
-					35, cv::Scalar(0), -1);
+					20, cv::Scalar(0), -1);
 		}
 	}
 }
@@ -447,6 +450,9 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 	vector<KeyPoint> keyPts;
 	Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
 	_goodFeatdetector->detect(gray, keyPts, cvMask);
+//	Size subPixWinSize(10,10);
+//	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
+//	cornerSubPix(gray, keyPts, subPixWinSize, Size(-1,-1), termcrit);
 
     //
 	int nptsnew = (int) keyPts.size();
@@ -473,6 +479,7 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 			k++;
 		}
 	}
+//	_extractor->compute(gray, keyPtsAccepted, _desc);
 	_advanceFrame();
 
 	return nTracked + nptsnew;

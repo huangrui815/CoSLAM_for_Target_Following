@@ -17,6 +17,7 @@ FeaturePoint::FeaturePoint() :
 				-1), pre(0), next(0), cam(0), preFrame(0), nextFrame(0), bKeyFrm(
 				false) {
 	id = (longInt) this;
+	mInterMatchFound= false;
 
 }
 FeaturePoint::FeaturePoint(int f1, int id, double x1, double y1) :
@@ -24,6 +25,7 @@ FeaturePoint::FeaturePoint(int f1, int id, double x1, double y1) :
 				-1), pre(0), next(0), cam(0), preFrame(0), nextFrame(0), bKeyFrm(
 				false) {
 	id = (longInt) this;
+	mInterMatchFound= false;
 }
 
 FeaturePoint::FeaturePoint(int f1, int id, double x1, double y1, double ud_x1, double ud_y1) :
@@ -31,6 +33,7 @@ FeaturePoint::FeaturePoint(int f1, int id, double x1, double y1, double ud_x1, d
 				-1), pre(0), next(0), cam(0), preFrame(0), nextFrame(0), bKeyFrm(
 				false) {
 	id = (longInt) this;
+	mInterMatchFound= false;
 }
 
 FeaturePoint::FeaturePoint(const FeaturePoint& other) {

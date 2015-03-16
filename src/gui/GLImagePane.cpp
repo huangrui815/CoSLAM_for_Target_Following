@@ -383,6 +383,11 @@ void GLImagePane::drawFeaturePoints() {
 
 			drawCircle(x, y, p->mpt->numVisCam * 1.5 * radius, 10);
 
+			if (p->mInterMatchFound){
+				glColor3f(1.0f, 0.0f, 0.5f);
+				drawCircle(x, y, 4 * radius, 10);
+			}
+
 			//drawCircle(x, y, radius, 10);
 
 			if (b_drawReprojectionError) {

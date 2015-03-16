@@ -605,64 +605,7 @@ void FeatureTracker::updateTracks01
 			else{
 				m_tks[trackId].clear();
 			}
-
-//			fprintf(pFile, "%f %u %f %f\n", cvErr[i], cvStatus[i], nextFeat.at<float>(i,0), nextFeat.at<float>(i,1));
 		}
-//		fclose(pFile);
-//		cv::imshow("Buffered video", cvImg1);
-//		cv::imshow("current image", cvImg2);
-//		cv::waitKey(10);
-
-		/*
-		FILE* pFile = fopen("pts1.txt", "w");
-		Mat_f fpts;
-		fpts.resize((int) lostTracksID.size(), 2);
-		for (int i = 0; i < lostTracksID.size(); i++){
-			int id = lostTracksID[i];
-			for (TrackedFeaturePoint* pt = tracks[id].tail; pt; pt = pt->pre){
-				if (pt->pt.f == _frame - 5){
-					fpts[2 * i] = (float)pt->pt.xo;
-					fpts[2*i+1] = (float)pt->pt.yo;
-					printf("%f %f\n", pt->pt.xo, pt->pt.yo);
-					//cv::circle(cvImg1, cv::Point2f(pt->pt.xo, pt->pt.yo),3, cv::Scalar(255,0,0),2,CV_AA);
-				}
-			}
-			fprintf(pFile, "%f %f\n", fpts[2*i], fpts[2*i + 1]);
-		}
-		fclose(pFile);
-
-		klt_.reset(bufferImg, fpts);
-		klt_.track(img);
-		Mat_d pts;
-		Mat_i flag;
-		klt_.readFeatPoints(pts, flag);
-
-		printf("\n");
-		pFile = fopen("pts2.txt", "w");
-		for (int i = 0; i < npts; i++){
-			int id = lostTracksID[i];
-			if (flag[i] == 0){
-				double in[2], out[2];
-				in[0] = pts[2 * i];
-				in[1] = pts[2*i + 1];
-				undistorPointNew(_K, _kc, in, out);
-				FeaturePoint p(_frame, in[0], in[1], out[0], out[1]);
-				tracks[id].add(p);
-				printf("%f %f\n", in[0], in[1]);
-				//cv::circle(cvImg2, cv::Point2f(in[0], in[1]),3, cv::Scalar(255,0,0),2,CV_AA);
-				nReTracked++;
-			}
-			else{
-				tracks[id].clear();
-			}
-			fprintf(pFile, "%f %f\n", pts[2*i], pts[2*i + 1]);
-		}
-		fclose(pFile);
-		*/
-
-//		cv::imshow("Buffered video", cvImg1);
-//		cv::imshow("current image", cvImg2);
-//		cv::waitKey(-1);
 
 		// Cache buffered images
 		memcpy(bufferImg.data, img.data, sizeof(uchar) * img.w * img.h);
@@ -686,105 +629,6 @@ void FeatureTracker::updateTracks01
 	}
 	}
 	printf("frame: %d, Detected: %d, Tracked: %d, ReTracked: %d, VirtualTracked: %d\n", frame_, nDetected, nTracked, nReTracked, nVirtualTracked);
-//	vector<FeaturePoint*> newDetectedPts;
-//	int imgNum = ptsInImage.size();
-//
-//		if (frame_ == 0){
-//			for (int ii = 0; ii < ptsInImage[frame_].pts.size(); ii++){
-//				ptsInImage[frame_].pts[ii]->tracked = true;
-//				tracks[ii].add(*(ptsInImage[frame_].pts[ii]));
-//				detectedFeatureNum_++;
-//			}
-//		}
-//		else {
-//			for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++){
-//				if (!tracks[i].empty()){
-//					FeaturePoint& pt = tracks[i].tail->pt;
-//					int id = tracks[i].tail->pt.id;
-//
-//					if (id != -1){
-//						if (frame_ < imgNum && imgPairs[frame_ - 1].pointPair.count(id)){
-//							ImagePair& pair01 = imgPairs[frame_ - 1];
-//							int trackedId = pair01.pointPair[id];
-//							FeaturePoint* pt = ptsInImage[frame_].ptMap[trackedId];
-//							pt->tracked = true;
-//							tracks[i].add(*pt);
-////							trackedFeatureNum_++;
-//						}
-//						else if (frame_ + 1 < imgNum && imgPairs[imgNum -1 + frame_ - 1].pointPair.count(id)){
-//							ImagePair& pair02 = imgPairs[imgNum -1 + frame_ - 1];
-//							FeaturePoint* pt = new FeaturePoint(frame_, -1, -1, -1, -1);
-//							pt->id = -1;
-//							pt->tracked = true;
-//							pt->virtualNum = 1;
-//							tracks[i].add(*pt);
-//						}
-//						else if (frame_ + 2 < imgNum && imgPairs[imgNum -1 + imgNum - 2 + frame_ - 1].pointPair.count(id)){
-//							ImagePair& pair03 = imgPairs[imgNum -1 + imgNum - 2 + frame_ - 1];
-//							FeaturePoint* pt = new FeaturePoint(frame_, -1, -1, -1, -1);
-//							pt->id = -1;
-//							pt->tracked = true;
-//							pt->virtualNum = 2;
-//							tracks[i].add(*pt);
-//						}
-//						else{
-//							tracks[i].clear();
-//						}
-//					}
-//					else{
-//						if (pt.virtualNum == 1){
-//							ImagePair& pair02 = imgPairs[imgNum -1 + frame_ - 2];
-//							int trackedId = pair02.pointPair[tracks[i].tail->pre->pt.id];
-//							FeaturePoint* pt = ptsInImage[frame_].ptMap[trackedId];
-//							pt->tracked = true;
-//							tracks[i].add(*pt);
-////							trackedFeatureNum_++;
-//						}
-//						else if (pt.virtualNum == 2 && tracks[i].tail->pre->pt.id != -1){
-//							FeaturePoint* pt = new FeaturePoint(frame_, -1, -1, -1, -1);
-//							pt->id = -1;
-//							pt->virtualNum = 2;
-//							pt->tracked = true;
-//							tracks[i].add(*pt);
-//						}
-//						else if (pt.virtualNum == 2 && tracks[i].tail->pre->pt.id == -1){
-//							ImagePair& pair03 = imgPairs[imgNum -1 + imgNum - 2 + frame_ - 3];
-//							int trackedId = pair03.pointPair[tracks[i].tail->pre->pre->pt.id];
-//							FeaturePoint* pt = ptsInImage[frame_].ptMap[trackedId];
-//							pt->tracked = true;
-//							tracks[i].add(*pt);
-////							trackedFeatureNum_++;
-//						}
-//					}
-//				}
-//			}
-//			vector<FeaturePoint*> newDetectedPts;
-//			for (int i = 0; i < ptsInImage[frame_].ptMap.size(); i++){
-//				if (ptsInImage[frame_].pts[i]->tracked == false){
-//					newDetectedPts.push_back(ptsInImage[frame_].pts[i]);
-//				}
-//				else
-//					trackedFeatureNum_++;
-//			}
-//			detectedFeatureNum_ = newDetectedPts.size();
-//
-//			if (detectedFeatureNum_ > 0){
-//				for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++){
-//					if (!newDetectedPts.empty()){
-//						if (tracks[i].empty()){
-//							tracks[i].add(*(newDetectedPts.back()));
-//							newDetectedPts.pop_back();
-//						}
-//					}
-//				}
-//			}
-//		}
-//		newDetectedPts.clear();
-
-	//	if (frmId == 2)
-	//		return;
-	//trackRatio = (trackedFeatureNum_ * 1.0) / double(nOldFeatures);
-//	trackRatio = (trackedFeatureNum_ * 1.0) / (double)ptsInImage[frame_].ptMap.size();
 }
 
 int FeatureTracker::currentFrame(){
@@ -859,6 +703,8 @@ int FeatureTracker::first(int frame, const unsigned char* imgData, FeaturePoints
 	Mat_i flag;
 	klt_.readFeatPoints(featPts, flag);
 	updateTracks01(featPts, flag, img, ips);
+	firstTracking = false;
+
 	oldImg.resize(img.w, img.h);
 	memcpy(oldImg.data, img.data, sizeof(uchar) * img.w * img.h);
 	return detectedFeatureNum_;
@@ -898,7 +744,7 @@ int FeatureTracker::getNumDynamicFeats(){
 			num++;
 		}
 	}
-	printf("getNumDynamicFeats %d\n", num);
+//	printf("getNumDynamicFeats %d\n", num);
 	return num;
 }
 

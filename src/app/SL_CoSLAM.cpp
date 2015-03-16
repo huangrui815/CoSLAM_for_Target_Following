@@ -25,6 +25,8 @@
 #include <set>
 #include <cstdio>
 
+#include "opencv2/features2d/features2d.hpp"
+
 void enterBACriticalSection() {
 	pthread_mutex_lock(&MyApp::s_mutexBA);
 }
@@ -55,6 +57,7 @@ CoSLAM::CoSLAM() :
 	dynObjPos[0] = dynObjPos[1] = dynObjPos[2] = 0;
 	dynObjPresent = false;
 	prevPoseSet = false;
+	mExtractor = new cv::BriefDescriptorExtractor;
 }
 CoSLAM::~CoSLAM() {
 	//clear the queued BAs
@@ -782,6 +785,8 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 	for (int i = 0; i < numCams; i++){
 		slam[i].checkStaticMapPoints();
 	}
+	checkDynamicPoints();
+
 	leaveBACriticalSection();
 	m_tmMapClassify = tm.toc();
 }
@@ -1934,6 +1939,7 @@ int CoSLAM::genNewMapPoints(bool& merged) {
 		m_lastFrmInterMapping = curFrame;
 		logInfo("curFrame:%d, m_lastFrmInterMapping:%d, %d new points\n",
 				curFrame, m_lastFrmInterMapping, num);
+		genNewMapPointsInterCam_new();
 		//pause();
 	}
 	return num;
@@ -2438,6 +2444,142 @@ int CoSLAM::genNewMapPointsInterCam(bool bUseSURF) {
 	return num;
 }
 
+void CoSLAM::computeDescOfAvailablePts(CameraGroup& group,
+		vector<vector<FeaturePoint*> >& featPtsVec,
+		vector<cv::Mat>& cvDescVec){
+	//For each camera in group
+	for (int j = 0; j< group.num; j++){
+		int iCam = group.camIds[j];
+		SingleSLAM& currSLAM = slam[iCam];
+		cv::Mat cvImg(currSLAM.m_img.rows,
+				currSLAM.m_img.cols, CV_8UC1, currSLAM.m_img.data);
+		vector<FeaturePoint*> featPts;
+		Mat_d featPtsMat;
+		slam[iCam].getMappedFeatPts(0,1,featPts,&featPtsMat);
+		printf("featPts.size: %d\n", featPts.size());
+		featPtsVec.push_back(featPts);
+
+		//Get the cv key points
+		cv::Mat desc;
+		vector<cv::KeyPoint> cvKeyPtsVec;
+		for (int jj = 0; jj < featPts.size(); jj++){
+//			if (featPts[jj]->mCVKeyPt.pt.x > 0 && featPts[jj]->mCVKeyPt.pt.y > 0){
+				printf("point x y: %f %f\n",featPts[jj]->mo[0], featPts[jj]->mo[1]);
+				cvKeyPtsVec.push_back(cv::KeyPoint(featPts[jj]->mo[0], featPts[jj]->mo[1], 3));
+//			}
+		}
+		printf("cvKeyPtsVec size: %d\n", cvKeyPtsVec.size());
+		mExtractor->compute(cvImg, cvKeyPtsVec, desc);
+		printf("desc size: %d\n", desc.rows);
+		cvDescVec.push_back(desc);
+	}
+}
+int CoSLAM::genNewMapPointsInterCam_new(){
+	//For each group
+	for (int i = 0; i < m_groupNum; i++) {
+		printf("group %d\n", i);
+
+		CameraGroup& group = m_groups[i];
+		if (group.num <= 1)
+			continue;
+		bool runMatching = true;
+		enterBACriticalSection();
+		//skip first five frames
+		if (curFrame < 5)
+			runMatching = false;
+
+		if (runMatching) {
+			//for the current camera group
+			vector<vector<FeaturePoint*> > featPtsVec;
+			vector<cv::Mat> cvDescVec;
+			computeDescOfAvailablePts(group, featPtsVec, cvDescVec);
+
+			printf("cvDescVec %d\n", cvDescVec.size());
+			printf("cvDescVec[0] %d\n", cvDescVec[0].rows);
+			printf("cvDescVec[1] %d\n", cvDescVec[1].rows);
+
+			int numInlier = 0;
+			int num = 0;
+			for (int j = 0; j< group.num; j++){
+				for (int k = j+1; k < group.num; k++){
+					int jCam = group.camIds[j];
+					int kCam = group.camIds[k];
+					std::vector< std::vector<cv::DMatch> > matchesCV;
+					mMatcher.knnMatch(cvDescVec[jCam], cvDescVec[kCam], matchesCV, 2);
+					printf("matchesCV.size(): %d\n", matchesCV.size());
+					printf("cvDescVec[%d]: %d\n", jCam, cvDescVec[jCam].rows);
+					printf("cvDescVec[%d]: %d\n", kCam, cvDescVec[kCam].rows);
+
+					Matching matches;
+					matches.clear();
+					matches.reserve(matchesCV.size());
+
+					  for( int i = 0; i < matchesCV.size(); i++ )
+					  {
+						  if(matchesCV[i][0].distance < 0.8 * matchesCV[i][1].distance)
+						{
+				//		  good_matches.push_back( matchesCV[i][0]);
+						  matches.add(matchesCV[i][0].queryIdx, matchesCV[i][0].trainIdx,
+								  matchesCV[i][0].distance);
+
+						  int queryId = matchesCV[i][0].queryIdx;
+						  int trainId = matchesCV[i][0].trainIdx;
+						  Mat_d ms(2, 2);
+						  Mat_d nms(2, 2);
+						  Mat_d Ks(2, 9);
+					      Mat_d Rs(2, 9);
+					      Mat_d Ts(2, 3);
+
+					      ms.data[0] = featPtsVec[jCam][queryId]->m[0];
+					      ms.data[1] = featPtsVec[jCam][queryId]->m[1];
+					      normPoint(slam[jCam].iK.data,ms.data,nms.data);
+					      memcpy(Ks.data , slam[jCam].K.data, sizeof(double) * 9);
+						  memcpy(Rs.data , slam[jCam].m_camPos.current()->R, sizeof(double) * 9);
+						  memcpy(Ts.data , slam[jCam].m_camPos.current()->t, sizeof(double) * 3);
+
+					      ms.data[2] = featPtsVec[kCam][trainId]->m[0];
+						  ms.data[3] = featPtsVec[kCam][trainId]->m[1];
+						  normPoint(slam[kCam].iK.data,ms.data+2,nms.data+2);
+						  memcpy(Ks.data + 9 , slam[kCam].K.data, sizeof(double) * 9);
+						  memcpy(Rs.data + 9, slam[kCam].m_camPos.current()->R, sizeof(double) * 9);
+						  memcpy(Ts.data + 3, slam[kCam].m_camPos.current()->t, sizeof(double) * 3);
+						  double M[4];
+						  triangulateMultiView(2, Rs.data, Ts.data, nms.data, M);
+						  num++;
+						  //check re-projection error
+						  bool outlier = false;
+							for (int i = 0; i < 2; i++) {
+								double rm[2];
+								project(Ks.data + 9 * i, Rs.data + 9 * i, Ts.data + 3 * i, M,
+										rm);
+								double err = dist2(ms.data + 2 * i, rm);
+								if (err > 3
+										|| isAtCameraBack(Rs.data + 9 * i, Ts.data + 3 * i, M)) {
+									outlier = true;
+									break;
+								}
+							}
+
+							if (!outlier){
+								featPtsVec[jCam][queryId]->mInterMatchFound = true;
+								featPtsVec[kCam][trainId]->mInterMatchFound = true;
+								numInlier++;
+							}
+						}
+					}
+				}
+			}
+			printf("num of inlier %d of total num %d\n", numInlier, num);
+
+			//Assume now there are only two cameras
+
+		}
+
+		leaveBACriticalSection();
+	}
+	return 0;
+}
+
 void CoSLAM::getViewOverlapCosts(double vcosts[SLAM_MAX_NUM * SLAM_MAX_NUM],
 		int minOverlapNum, double minOverlapAreaRatio) {
 	int nSharePoints[SLAM_MAX_NUM * SLAM_MAX_NUM];
@@ -2858,27 +3000,27 @@ void CoSLAM::getAllFeatPtsAtKeyFrms(int c, vector<FeaturePoint*>& featPoints) {
 	}
 }
 
-void CoSLAM::getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
-		vector<vector<Point3dId> >& dynTracks, int trjLen) {
-	map<size_t, vector<Point3dId> > tracks;
+void CoSLAM::getDynTracks(const vector<vector<MapPoint*> >& dynMapPts,
+		vector<vector<MapPoint*> >& dynTracks, int trjLen) {
+	map<size_t, vector<MapPoint*> > tracks;
 
 	dynTracks.clear();
 	if (dynMapPts.empty())
 		return;
 
 	int l = 0;
-	for (vector<vector<Point3dId> >::const_reverse_iterator iter =
+	for (vector<vector<MapPoint*> >::const_reverse_iterator iter =
 			dynMapPts.rbegin(); iter != dynMapPts.rend() && l < trjLen;
 			iter++, l++) {
-		const vector<Point3dId>& pts = *iter;
+		const vector<MapPoint*>& pts = *iter;
 		if (l == 0) {
 			for (size_t n = 0; n < pts.size(); n++) {
-				size_t id = pts[n].id;
+				size_t id = pts[n]->id;
 				tracks[id].push_back(pts[n]);
 			}
 		} else {
 			for (size_t n = 0; n < pts.size(); n++) {
-				size_t id = pts[n].id;
+				size_t id = pts[n]->id;
 				if (tracks.count(id) == 0)
 					continue;
 				else
@@ -2887,9 +3029,30 @@ void CoSLAM::getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
 		}
 	}
 
-	for (map<size_t, vector<Point3dId> >::iterator iter = tracks.begin();
+	for (map<size_t, vector<MapPoint*> >::iterator iter = tracks.begin();
 			iter != tracks.end(); iter++) {
 		dynTracks.push_back(iter->second);
+	}
+}
+
+void CoSLAM::checkDynamicPoints(){
+	std::vector<std::vector<MapPoint*> > dynTracks;
+	getDynTracks(m_dynMapPts, dynTracks, 10);
+	for (int i = 0; i< dynTracks.size(); i++){
+		vector<MapPoint*>& currVec = dynTracks[i];
+		for (int j = 0; j < currVec.size() && j < 10; j++){
+			MapPoint* mpt = currVec[j];
+			for (int k = 0; k < numCams; k++){
+				FeaturePoint* fpt = mpt->pFeatures[k];
+				if (fpt){
+					double rm[2];
+					project(slam[k].K.data, fpt->cam->R, fpt->cam->t, mpt->M, rm);
+					double repErr = dist2(fpt->m, rm);
+					if (repErr > 3)
+						mpt->setFalse();
+				}
+			}
+		}
 	}
 }
 
@@ -2915,14 +3078,16 @@ void CoSLAM::storeDynamicPoints() {
 		}
 	}
 	m_dynPts.push_back(pts);
-	std::vector<std::vector<Point3dId> > dynTracks;
-	std::vector<cv::Point3f> dynVel;
-	getDynTracks(m_dynPts, dynTracks, 10);
-	for (int ii = 0; ii < dynTracks.size(); ii++){
-		dynVel.push_back(cv::Point3f(dynTracks[ii][0].x - dynTracks[ii][1].x,
-				dynTracks[ii][0].y - dynTracks[ii][1].y,
-				dynTracks[ii][0].z - dynTracks[ii][1].z));
-	}
+	m_dynMapPts.push_back(mptVec);
+
+//	std::vector<std::vector<Point3dId> > dynTracks;
+//	std::vector<cv::Point3f> dynVel;
+//	getDynTracks(m_dynPts, dynTracks, 10);
+//	for (int ii = 0; ii < dynTracks.size(); ii++){
+//		dynVel.push_back(cv::Point3f(dynTracks[ii][0].x - dynTracks[ii][1].x,
+//				dynTracks[ii][0].y - dynTracks[ii][1].y,
+//				dynTracks[ii][0].z - dynTracks[ii][1].z));
+//	}
 
 //	if (pts.size()> 10){
 //

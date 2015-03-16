@@ -17,6 +17,8 @@
 #include "SL_Camera.h"
 #include "SL_Define.h"
 
+#include "opencv2/features2d/features2d.hpp"
+
 class MapPoint;
 #define TYPE_FEATPOINT_STATIC  0
 #define TYPE_FEATPOINT_DYNAMIC 1
@@ -65,6 +67,9 @@ public:
 	FeaturePoint* nextFrame;
 
 	bool bKeyFrm;
+
+	bool mInterMatchFound;
+
 public:
 	FeaturePoint();
 	~FeaturePoint();

@@ -85,6 +85,7 @@ FeaturePoint* FeaturePoints::add(int f, int camId, double xo, double yo, double 
 	FeaturePoint* pt = new FeaturePoint(f, camId, xo, yo, x, y);
 	return add(pt);
 }
+
 FeaturePoint* FeaturePoints::add(int f, int camId, double x, double y) {
 	if (f < 0) {
 		repErr("ImgPointSet::add() - error");

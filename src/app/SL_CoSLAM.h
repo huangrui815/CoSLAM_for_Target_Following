@@ -56,6 +56,8 @@ public:
 public:
 	//to store dynamic points
 	vector<vector<Point3dId> > m_dynPts;
+	vector<vector<MapPoint*> > m_dynMapPts;
+
 	vector<cv::Point3f> m_dynPtsCenter;
 	//for camera grouping
 	double viewOverlapCost[SLAM_MAX_NUM * SLAM_MAX_NUM];
@@ -138,6 +140,9 @@ public:
 	double dynObjPos[3];
 	double dynObjPosVar[3];
 	bool dynObjPresent;
+
+	cv::Ptr<cv::DescriptorExtractor> mExtractor;
+	cv::BFMatcher mMatcher;
 public:
 	void processOneFrame();
 public:
@@ -192,6 +197,8 @@ public:
 	int genNewMapPoints(bool& merged);
 	int genNewMapPoints_new();
 	int genNewMapPointsInterCam(bool bUseSURF);
+	int genNewMapPointsInterCam_new();
+	void computeDescOfAvailablePts(CameraGroup& group, vector<vector<FeaturePoint*> >& featPtsVec, vector<cv::Mat>& cvDescVec);
 
 	/*camera grouping*/
 	void getViewOverlapCosts(double vcosts[SLAM_MAX_NUM * SLAM_MAX_NUM],
@@ -269,8 +276,9 @@ public:
 	double prevPose[3];
 	bool prevPoseSet;
 	void storeDynamicPoints();
-	void getDynTracks(const vector<vector<Point3dId> >& dynMapPts,
-			vector<vector<Point3dId> >& dynTracks, int trjLen);
+	void getDynTracks(const vector<vector<MapPoint*> >& dynMapPts,
+			vector<vector<MapPoint*> >& dynTracks, int trjLen);
+	void checkDynamicPoints();
 
 	int getCurFrameInVideo(int c) const {
 		return slam[c].startFrameInVideo + curFrame + 1;

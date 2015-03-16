@@ -103,6 +103,7 @@ bool offlineMain() {
 		for (int i = 0; i < endFrame && !MyApp::bExit; i++) {
 
 //				redrawAllViews();
+//			MyApp::bStop = true;
 				while (MyApp::bStop) {
 					Sleep(50);
 				};
@@ -151,7 +152,7 @@ bool offlineMain() {
 
 			coSLAM.m_tmPerStep = tmPerStep.toc();
 			tmStepVec.push_back(coSLAM.m_tmPerStep);
-			Sleep(100);
+			Sleep(30);
 
 			if (i % 500 == 0) {
 				//coSLAM.releaseFeatPts(coSLAM.curFrame - 500);

@@ -79,7 +79,7 @@ public:
 public:
 	void updateTracks(const Mat_d& pts, const Mat_i& flag);
 	void updateTracks01(const Mat_d& pts, const Mat_i& flag, const ImgG& img,
-			FeaturePoints& ips);
+				FeaturePoints& ips);
 	void updateTracks02(FeaturePoints& ips,
 			vector<unsigned int>& featureId,
 			vector<float>& features);
