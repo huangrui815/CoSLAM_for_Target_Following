@@ -136,14 +136,14 @@ bool offlineMain() {
 			if (coSLAM.dynObjPresent){
 				for (int i=0; i < coSLAM.numCams; i++){
 					coSLAM.slam[i].m_camPos.current()->setDynPos(coSLAM.dynObjPos);
-					printf("dynObjPos: %lf %lf %lf\n", coSLAM.dynObjPos[0], coSLAM.dynObjPos[1], coSLAM.dynObjPos[2]);
+//					printf("dynObjPos: %lf %lf %lf\n", coSLAM.dynObjPos[0], coSLAM.dynObjPos[1], coSLAM.dynObjPos[2]);
 					double targetPos[3];
 					coSLAM.transformTargetPos2Global(coSLAM.dynObjPos, targetPos);
-					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+//					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
 					double theta = atan2(coSLAM.slam[i]._targetPosInCam[0], coSLAM.slam[i]._targetPosInCam[2]);
 					double H = targetPos[2] * 2;
 					double Z = coSLAM.slam[i]._targetPosInCam[2];
-					printf("cam: %d, theta: %lf, H: %lf, Z: %lf\n", i, theta * 180 / 3.1415926, H, Z);
+//					printf("cam: %d, theta: %lf, H: %lf, Z: %lf\n", i, theta * 180 / 3.1415926, H, Z);
 				}
 			}
 

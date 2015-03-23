@@ -326,7 +326,7 @@ bool CoSLAM::initMapMultiCam() {
 	m_nKeyFrame++;
 
 	for (int i = 0; i < numCams; i++) {
-		slam[i].getNumMappedStaticPts();
+		cout << "slam[i].getNumMappedStaticPts() " << slam[i].getNumMappedStaticPts() << endl;
 
 		CamPoseItem* pCamPos = slam[i].m_camPos.add(curFrame, slam[i]._ts, slam[i].camId,
 				initMapper.camR[i], initMapper.camT[i]);
@@ -348,9 +348,12 @@ bool CoSLAM::initMapMultiCam() {
 	for (int i = 0; i < numCams; i++) {
 		FeaturePoint* pFeatHead = slam[i].m_featPts.hd.next;
 		FeaturePoint* pFeatTail = slam[i].m_featPts.tail;
+		int num = 0;
 		for (FeaturePoint* p = pFeatHead; p != pFeatTail; p = p->next) {
-			if (p->mpt && p->mpt->isLocalStatic() && p->mpt->numVisCam > 1)
+			if (p->mpt && p->mpt->isLocalStatic() && p->mpt->numVisCam > 1){
 				bundler.addCorrespondingPoint(p->mpt, p);
+				num++;
+			}
 		}
 	}
 
@@ -645,6 +648,7 @@ void CoSLAM::featureTracking() {
 	for (int i = 0; i < numCams; i++)
 			slam[i].trackFeaturePoints();
 	m_tmFeatureTracking = tm.toc();
+	cout << "m_tmFeatureTracking " << m_tmFeatureTracking << endl;
 }
 
 void CoSLAM::featureReceiving() {
@@ -782,10 +786,10 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 	enterBACriticalSection();
 //	mapPointsClassify(12.0);
 	mapPointsClassify(3.0);
-	for (int i = 0; i < numCams; i++){
-		slam[i].checkStaticMapPoints();
-	}
-	checkDynamicPoints();
+//	for (int i = 0; i < numCams; i++){
+//		slam[i].checkStaticMapPoints();
+//	}
+//	checkDynamicPoints();
 
 	leaveBACriticalSection();
 	m_tmMapClassify = tm.toc();
@@ -1939,7 +1943,7 @@ int CoSLAM::genNewMapPoints(bool& merged) {
 		m_lastFrmInterMapping = curFrame;
 		logInfo("curFrame:%d, m_lastFrmInterMapping:%d, %d new points\n",
 				curFrame, m_lastFrmInterMapping, num);
-		genNewMapPointsInterCam_new();
+//		genNewMapPointsInterCam_new();
 		//pause();
 	}
 	return num;

@@ -226,6 +226,9 @@ int MyApp::readScript(string& filePath){
 			prevLine.erase(0,1);
 			printf("%s\n", prevLine.c_str());
 		}
+		else if (str[0] == '$'){
+			printf("%s\n", s.c_str());
+		}
 		else{
 			if (prevLine.compare(modeStr) == 0 && s.size() > 0){
 				mModeStr = s;
@@ -1373,7 +1376,7 @@ bool MyApp::OnInit() {
 	readScript(scriptPath);
 
 	if (mModeStr.compare("offline") == 0){
-		if (!initOffline())
+		if (!initOffline ())
 			return false;
 	}
 	else if(mModeStr.compare("online2Cam") == 0){

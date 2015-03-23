@@ -1,6 +1,8 @@
 #include "CVKLTTracker.h"
+#include "BriefExtractor.h"
 #include "opencv2/opencv.hpp"
 #include "opencv2/nonfree/features2d.hpp"
+
 
 using namespace cv;
 
@@ -20,29 +22,30 @@ CVKLTTracker::CVKLTTracker(){
 	                             // 400; for ardrone video (630 x 360)
 //		_detector = new cv::BRISK();
 //		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(512, 0.01, 30, 3, 0, 0.04);
-		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 3, 3, 0, 0.04);
-		_detector = new cv::FastFeatureDetector(30, true);
+		_goodFeatdetector = new cv::GoodFeaturesToTrackDetector(KLT_MAX_FEATURE_NUM, 0.01, 1, 3, 0, 0.04);
+		_detector = new cv::FastFeatureDetector(20, true);
 //		_detector = new cv::StarFeatureDetector();
 //	_detector = new cv::OrbFeatureDetector(KLT_MAX_FEATURE_NUM);
 		_extractor = new BriefDescriptorExtractor;
+		mCount = 0;
+		mDesc = Mat::zeros(KLT_MAX_FEATURE_NUM, 32, CV_8UC1);
+		mBriefExtractor = new BriefExtractor();
 }
 CVKLTTracker::~CVKLTTracker() {
 
 }
-void CVKLTTracker::_genPointMask(ImgG& mask) {
-	mask.resize(gray.cols, gray.rows);
-	mask.fill(255);
-	cv::Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
+void CVKLTTracker::_genPointMask(cv::Mat& mask) {
+	mask.create(gray.rows, gray.cols,CV_8UC1);
 
 	int margin = 20;
 	for (int x = 0; x < gray.rows; x++){
 		for (int y = 0; y < gray.cols; y++){
 			int id = y + x * gray.cols;
 			if (x < margin || x > gray.rows - margin || y < margin || y > gray.cols - margin){
-				cvMask.data[id] = 0;
+				mask.data[id] = 0;
 			}
 			else
-				cvMask.data[id] = 255;
+				mask.data[id] = 255;
 		}
 	}
 
@@ -51,9 +54,9 @@ void CVKLTTracker::_genPointMask(ImgG& mask) {
 //			cv::circle(cvMask,
 //					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
 //					35, cv::Scalar(0), -1);
-			cv::circle(cvMask,
+			cv::circle(mask,
 					cv::Point2f(_featPts[2 * i], _featPts[2 * i + 1]),
-					20, cv::Scalar(0), -1);
+					5, cv::Scalar(0), -1);
 		}
 	}
 }
@@ -80,8 +83,6 @@ void CVKLTTracker::open(int width, int height, int blkWidth /* = 12 */,int minDi
 	_featPts.resize(KLT_MAX_FEATURE_NUM, 2);
 
 	_flag.resize(KLT_MAX_FEATURE_NUM, 1);
-	_flag_falseStatic.resize(KLT_MAX_FEATURE_NUM, 1);
-	_flag_falseStatic.fill(1);
 
 	_flagMapped.resize(KLT_MAX_FEATURE_NUM, 1);
 	_flagMapped.fill(0);
@@ -106,52 +107,29 @@ void CVKLTTracker::open(int width, int height, int blkWidth /* = 12 */,int minDi
 }
 
 void CVKLTTracker::detect(const ImgG& img) {
-//	memcpy(_img2.data, img.data, _img2.w * _img2.h * sizeof(uchar));
-
 	memcpy(gray.data, img.data, img.h * img.w * sizeof(uchar));
 
-//	DetectionParam param;
-//	param.blockSize = _blkWidth;
-//	param.minDistance = _minDist;
-//	GoodFeaturesToTrackDetector detector(param.maxCorners, param.qualityLevel,
-//			param.minDistance, param.blockSize, param.useHarrisDetector,
-//			param.k);
-	const int MAX_COUNT = KLT_MAX_FEATURE_NUM;
-	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
+	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,3,0.03);
 	Size subPixWinSize(10,10), winSize(31,31);
-
-	vector<KeyPoint> keypoints;
-//	goodFeaturesToTrack(gray, points[1], MAX_COUNT, 0.01, 25, _detectMask, 3, 0, 0.04);
-//	cornerSubPix(gray, points[1], subPixWinSize, Size(-1,-1), termcrit);
-
-//	goodFeaturesToTrack(gray, keypoints, MAX_COUNT, 0.01, 25, _detectMask, 3, 0, 0.04);
-	_goodFeatdetector->detect(gray, keypoints, _detectMask);
-//	_detector->detect(gray, keypoints);
-
-	for (int i = 0; i < keypoints.size(); i++){
-		points[1].push_back(cv::Point2f(keypoints[i].pt.x, keypoints[i].pt.y));
-	}
+	goodFeaturesToTrack(gray, points[1], KLT_MAX_FEATURE_NUM, 0.01, 10, Mat(), 3, 0, 0.04);
 	cornerSubPix(gray, points[1], subPixWinSize, Size(-1,-1), termcrit);
 
-	_extractor->compute(gray, keypoints, _desc);
-
-//	Mat cvImg(_img2.m, _img2.n, CV_8UC1, _img2.data);
-//	vector<KeyPoint> keyPts;
-//	detector.detect(cvImg, keyPts);
-//
-//	int npts = (int) keyPts.size();
 	int npts = points[1].size();
 
+	vector<cv::KeyPoint> keyPts;
 	for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++) {
 		if (i < npts) {
 			_featPts[2 * i] = points[1][i].x;
 			_featPts[2 * i + 1] = points[1][i].y;
 			_flag[i] = KLT_NEWLY_DETECTED;
 			pts2trackId.push_back(i);
+			keyPts.push_back(cv::KeyPoint(points[1][i].x, points[1][i].y, 3));
 		} else {
 			_flag[i] = KLT_INVALID;
 		}
 	}
+	mBriefExtractor->computeIntegralImg(gray);
+	mBriefExtractor->compute(gray, keyPts, _desc);
 	_advanceFrame();
 }
 
@@ -159,31 +137,11 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 	assert(_flag.m == KLT_MAX_FEATURE_NUM && _featPts.m == KLT_MAX_FEATURE_NUM);
     assert(!_featPts.empty());
 
-//	memcpy(_img2.data, img.data, _img2.w * _img2.h * sizeof(uchar));
     memcpy(gray.data, img.data, img.h * img.w * sizeof(uchar));
-//    Mat gray(img.h, img.w, CV_8UC1, img.data);
-
-//	Mat cvImg1(_img1.h, _img1.w, CV_8UC1, _img1.data);
-//	Mat cvImg2(_img2.h, _img2.w, CV_8UC1, _img2.data);
-
-//	cv::imshow("img1", cvImg1);
-//	cv::imshow("img2", cvImg2);
-//	cv::waitKey(-1);
 
     if (points[0].empty())
     	return -1;
 
-//	int npts = 0;
-//	vector<int> ids;
-//	for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++) {
-//		if (_flag[i] >= 0) {
-//			npts++;
-//			ids.push_back(i);
-//		}
-//	}
-//
-//	Mat cvPrePts(npts, 2, CV_32FC1);
-//	Mat cvNextPts(npts, 2, CV_32FC1);
 	vector<uchar> status;
 	vector<float> err;
 
@@ -191,7 +149,7 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		gray.copyTo(prevGray);
 
 	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-	Size subPixWinSize(10,10), winSize(31,31);
+	Size winSize(15,15);
 	calcOpticalFlowPyrLK(prevGray, gray, points[0], points[1], status, err, winSize,
 										 3, termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS, 1e-4);
 
@@ -206,8 +164,42 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 
 	size_t i,k;
 	int numErr = 0;
-	int numFlow = 0;
+	int numFlowErr = 0;
+	int numDescErr = 0;
 	vector<int> pts2trackId_backup = pts2trackId;
+
+	mCount++;
+	bool replaceDesc = false;
+	if (mCount == 10){
+		replaceDesc = true;
+		mCount = 0;
+	}
+
+	// Check the descriptor
+	vector<bool> descCompare;
+	mBriefExtractor->computeIntegralImg(gray);
+	for (int i = 0; i < points[1].size(); i++){
+		if (status[i]){
+			int trackId = pts2trackId[i];
+			cv::KeyPoint kpt(points[1][i].x, points[1][i].y ,3);
+			Mat desc;
+			mBriefExtractor->compute(gray, kpt, desc);
+
+			double dist = cv::norm(desc, mDesc.row(trackId),NORM_HAMMING);
+			if (dist < 30){
+				if (replaceDesc)
+					desc.copyTo(mDesc.row(trackId));
+
+				descCompare.push_back(true);
+			}
+			else
+				descCompare.push_back(false);
+		}
+		else
+			descCompare.push_back(false);
+	}
+
+	// Update tracking results
 	for (int i = k = 0; i < points[1].size(); i++) {
 		int ii = pts2trackId[i];
 		double flowDist = pow(points[1][i].x - _oldFeatPts.data[2 * ii],2) +
@@ -223,10 +215,12 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 		if (status[i] == 0)
 			numErr++;
 		if (flowDist >= _trackingDistanceConstraint)
-			numFlow++;
+			numFlowErr++;
+		if (!descCompare[i])
+			numDescErr++;
 
 		if (status[i] != 0 && flowDist < _trackingDistanceConstraint/*&& cvErr[k] < _maxErr*/
-				&& _flag_falseStatic[ii] > 0) {
+				&& descCompare[i]) {
 			_featPts.data[2 * ii] = points[1][i].x;
 			_featPts.data[2 * ii + 1] = points[1][i].y;
 			pts2trackId[k] = ii;
@@ -247,8 +241,8 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 	float trackRatio = nTracked * 1.0f / prevFeatNum;
 	float trackMappedRatio = nTrackedMapped * 1.0f / _numMappedTracks;
 
-	printf("Track ratio: %f, mapped tracks: %f, numErr: %d, numFlow: %d\n", trackRatio, trackMappedRatio,
-			numErr, numFlow);
+	printf("Track ratio: %f, mapped tracks: %f, numErr: %d, numFlow: %d, numDescErr: %d\n", trackRatio, trackMappedRatio,
+			numErr, numFlowErr, numDescErr);
 
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -301,6 +295,202 @@ int CVKLTTracker::_track(const ImgG& img, int& nTracked) {
 	pts2trackId.resize(nTracked);
 	return nTracked;
 }
+
+void CVKLTTracker::download(const oclMat& d_mat, vector<uchar>& vec)
+{
+    vec.clear();
+    Mat mat(1, d_mat.cols, CV_8UC1);
+    d_mat.download(mat);
+	for (int i = 0; i < mat.cols; i++){
+		vec.push_back(mat.at<uchar>(0,i));
+//		cout << vec[i] << " ";
+//		cout << vec[i].x << " " << vec[i].y <<endl;
+	}
+}
+
+void CVKLTTracker::download(const oclMat& d_mat, vector<cv::Point2f>& vec)
+{
+	vec.clear();
+    Mat mat(1, d_mat.cols, CV_32FC2);
+    d_mat.download(mat);
+	for (int i = 0; i < mat.cols; i++){
+		vec.push_back(cv::Point2f(mat.at<float>(0,2*i), mat.at<float>(0,2*i+1)));
+//		cout << vec[i].x << " " << vec[i].y <<endl;
+	}
+}
+
+int CVKLTTracker::_track_gpu(const ImgG& img, int& nTracked) {
+	assert(_flag.m == KLT_MAX_FEATURE_NUM && _featPts.m == KLT_MAX_FEATURE_NUM);
+    assert(!_featPts.empty());
+
+    memcpy(gray.data, img.data, img.h * img.w * sizeof(uchar));
+
+    if (points[0].empty())
+    	return -1;
+
+	vector<uchar> status;
+	vector<float> err;
+
+	if(prevGray.empty())
+		gray.copyTo(prevGray);
+
+	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
+	Size winSize(15,15);
+	float *data = new float[points[0].size()*2];
+	for (int i = 0; i < points[0].size(); i++){
+		data[2 * i] = points[0][i].x;
+		data[2 * i + 1] = points[0][i].y;
+//		cout << data[2 * i] << " " << data[2 * i + 1] << endl;
+	}
+	cv::Mat pts_temp(1, points[0].size(), CV_32FC2, data);
+	d_prevPts.upload(pts_temp);
+	d_pyrLK.sparse(oclMat(prevGray), oclMat(gray), d_prevPts, d_nextPts, d_status);
+    download(d_nextPts, points[1]);
+    download(d_status, status);
+
+	Mat_i _oldFlag;
+	_oldFlag.cloneFrom(_flag);
+
+	_flag.fill(-1);
+
+	nTracked = 0;
+	int nTrackedMapped = 0;
+	int prevFeatNum = points[0].size();
+
+	size_t i,k;
+	int numErr = 0;
+	int numFlowErr = 0;
+	int numDescErr = 0;
+	vector<int> pts2trackId_backup = pts2trackId;
+
+	mCount++;
+	bool replaceDesc = false;
+	if (mCount == 10){
+		replaceDesc = true;
+		mCount = 0;
+	}
+
+	// Check the descriptor
+	vector<bool> descCompare;
+	mBriefExtractor->computeIntegralImg(gray);
+	for (int i = 0; i < points[1].size(); i++){
+		if (status[i]){
+			int trackId = pts2trackId[i];
+			cv::KeyPoint kpt(points[1][i].x, points[1][i].y ,3);
+			Mat desc;
+			mBriefExtractor->compute(gray, kpt, desc);
+
+			double dist = cv::norm(desc, mDesc.row(trackId),NORM_HAMMING);
+			if (dist < 30){
+				if (replaceDesc)
+					desc.copyTo(mDesc.row(trackId));
+
+				descCompare.push_back(true);
+			}
+			else
+				descCompare.push_back(false);
+		}
+		else
+			descCompare.push_back(false);
+	}
+
+	// Update tracking results
+	for (int i = k = 0; i < points[1].size(); i++) {
+		int ii = pts2trackId[i];
+		double flowDist = pow(points[1][i].x - _oldFeatPts.data[2 * ii],2) +
+				pow(points[1][i].y - _oldFeatPts[2 * ii + 1], 2);
+
+		int margin = 20;
+
+		if ( points[1][i].x < margin || points[1][i].x > gray.cols - margin
+				|| points[1][i].y < margin || points[1][i].y > gray.rows - margin){
+			status[i] = 0;
+		}
+
+		if (status[i] == 0)
+			numErr++;
+		if (flowDist >= _trackingDistanceConstraint)
+			numFlowErr++;
+		if (!descCompare[i])
+			numDescErr++;
+
+		if (status[i] != 0 && flowDist < _trackingDistanceConstraint/*&& cvErr[k] < _maxErr*/
+				&& descCompare[i]) {
+			_featPts.data[2 * ii] = points[1][i].x;
+			_featPts.data[2 * ii + 1] = points[1][i].y;
+			pts2trackId[k] = ii;
+			points[1][k++] = points[1][i];
+			_flag.data[ii] = KLT_TRACKED;
+			nTracked++;
+
+			if (_flagMapped[ii] == 1)
+				nTrackedMapped++;
+		}
+		else {
+			_featPts.data[2 * ii] = -1;
+			_featPts.data[2 * ii + 1] = -1;
+			_flag.data[ii] = KLT_INVALID;
+		}
+	}
+
+	float trackRatio = nTracked * 1.0f / prevFeatNum;
+	float trackMappedRatio = nTrackedMapped * 1.0f / _numMappedTracks;
+
+	printf("Track ratio: %f, mapped tracks: %f, numErr: %d, numFlow: %d, numDescErr: %d\n", trackRatio, trackMappedRatio,
+			numErr, numFlowErr, numDescErr);
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+	// If map is tracked
+
+	_featPtsBackup.cloneFrom(_oldFeatPts);
+	_flagBackup.cloneFrom(_oldFlag);
+
+	_pts2trackIdBackup.reserve(pts2trackId_backup.size());
+	_pts2trackIdBackup = pts2trackId_backup;
+	prevGray.copyTo(grayBackup);
+	pointsBackup.reserve(points[0].size());
+	pointsBackup = points[0];
+
+	if (trackMappedRatio < 0.6){
+		return -1;
+	}
+//	// Map is lost but the tracking is not stable
+//	else if (_bLost && trackRatio < 0.9){
+//		_recoverFrmNum = 0;
+//		return -2;
+//	}
+//	// Map is lost and the tracking is stable
+//	else if (_bLost && trackRatio >= 0.9){
+//		_recoverFrmNum += 1;
+//		// if the stable state lasts for a while
+//		if (_recoverFrmNum < 5)
+//			return -3;
+//		else
+//		{
+//			_bLost = false;
+//			_recoverFrmNum = 0;
+//			nTracked = relocalise();
+//			std::cout << "Relocalise: tracked points: " << nTracked << std::endl;
+////			return -4;
+//		}
+//	}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+//	if (nTracked * 1.0f / prevFeatNum < 0.1){
+//		points[1].clear();
+//		points[1].resize(points[0].size());
+//		_flag.fill(-1);
+//		_featPts.fill(-1);
+//		nTracked = k = rematch();
+//	}
+
+	points[1].resize(nTracked);
+	pts2trackId.resize(nTracked);
+	return nTracked;
+}
+
 
 int CVKLTTracker::rollBack(){
 	//reset the tracker state
@@ -411,7 +601,7 @@ inline bool _keyPointCompare(const cv::KeyPoint& pt1, const cv::KeyPoint& pt2) {
 }
 int CVKLTTracker::track(const ImgG& img) {
 	int nTracked = 0;
-	int trackRes = _track(img, nTracked);
+	int trackRes = _track_gpu(img, nTracked);
 	printf("Tracked result: %d\n", trackRes);
 	if (trackRes < 0)
 		return trackRes;
@@ -424,37 +614,18 @@ int CVKLTTracker::track(const ImgG& img) {
 int CVKLTTracker::trackRedetect(const ImgG& img) {
     //track existing feature points first
 	int nTracked;
-	int trackRes = _track(img, nTracked);
+	int trackRes = _track_gpu(img, nTracked);
 	printf("Tracked number: %d\n", nTracked);
 	if (trackRes < 0)
 		return trackRes;
 
-//    DetectionParam param;
-//	param.blockSize = _blkWidth;
-//	param.minDistance = _minDist;
-    
-//	GoodFeaturesToTrackDetector detector(param.maxCorners, param.qualityLevel,
-//			param.minDistance, param.blockSize, param.useHarrisDetector,
-//			param.k);
-//	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-//	Size subPixWinSize(10,10), winSize(31,31);
-//
-//	GoodFeaturesToTrackDetector detector(KLT_MAX_FEATURE_NUM, 0.01, 20, 3, 0, 0.04);
-
-//	Mat cvImg(_img2.m, _img2.n, CV_8UC1, _img2.data);
-
     //generate point masks
-	ImgG mask;
-	_genPointMask(mask);
+	cv::Mat cvMask;
+	_genPointMask(cvMask);
 
 	vector<KeyPoint> keyPts;
-	Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
-	_goodFeatdetector->detect(gray, keyPts, cvMask);
-//	Size subPixWinSize(10,10);
-//	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-//	cornerSubPix(gray, keyPts, subPixWinSize, Size(-1,-1), termcrit);
+	_detector->detect(gray, keyPts, cvMask);
 
-    //
 	int nptsnew = (int) keyPts.size();
 	if (nptsnew + nTracked >= KLT_MAX_FEATURE_NUM)
 		nptsnew = KLT_MAX_FEATURE_NUM - nTracked;
@@ -468,8 +639,13 @@ int CVKLTTracker::trackRedetect(const ImgG& img) {
 	std::nth_element(keyPts.begin(), keyPts.begin() + nptsnew, keyPts.end(),
 			_keyPointCompare);
 
+	mBriefExtractor->computeIntegralImg(gray);
 	for (int i = 0, k = 0; i < KLT_MAX_FEATURE_NUM && k < nptsnew; i++) {
 		if (_flag[i] < 0) {
+			Mat desc;
+			mBriefExtractor->compute(gray, keyPts[k],desc);
+			desc.copyTo(mDesc.row(i));
+
 			_featPts[2 * i] = keyPts[k].pt.x;
 			_featPts[2 * i + 1] = keyPts[k].pt.y;
 			_flag[i] = KLT_NEWLY_DETECTED;
@@ -493,12 +669,19 @@ void CVKLTTracker::reset(const ImgG& img, const Mat_f& featPts){
 	points[1].clear();
 
 	memcpy(gray.data, img.data, img.h * img.w * sizeof(uchar));
+	mBriefExtractor->computeIntegralImg(gray);
 
 	int nTracked = 0;
 	for (int i = 0; i < KLT_MAX_FEATURE_NUM; i++) {
 		if (i < featPts.m) {
 			_featPts[2 * i] = featPts.data[2 * i];
 			_featPts[2 * i + 1] = featPts.data[2 * i + 1];
+
+			cv::KeyPoint keyPt(_featPts[2 * i], _featPts[2 * i + 1], 3);
+			cv::Mat desc;
+			mBriefExtractor->compute(gray, keyPt, desc);
+			desc.copyTo(mDesc.row(i));
+
 			points[1].push_back(cv::Point2f(featPts.data[2 * i], featPts.data[2 * i + 1]));
 			pts2trackId.push_back(i);
 			_flag[i] = KLT_NEWLY_DETECTED;
@@ -508,19 +691,12 @@ void CVKLTTracker::reset(const ImgG& img, const Mat_f& featPts){
 		}
 	}
 
-	ImgG mask;
-	_genPointMask(mask);
-	Mat cvMask(mask.m, mask.n, CV_8UC1, mask.data);
+	cv::Mat cvMask;
+	_genPointMask(cvMask);
 
-	GoodFeaturesToTrackDetector detector(512, 0.01, 20, 3, 0, 0.04);
+	GoodFeaturesToTrackDetector detector(KLT_MAX_FEATURE_NUM, 0.01, 5, 3, 0, 0.04);
 	vector<KeyPoint> temp;
 	detector.detect(gray, temp, cvMask);
-
-//	const int MAX_COUNT = KLT_MAX_FEATURE_NUM;
-//	TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03);
-//	Size subPixWinSize(10,10), winSize(31,31);
-//	goodFeaturesToTrack(gray, temp, MAX_COUNT, 0.01, 10, cvMask, 3, 0, 0.04);
-//	cornerSubPix(gray, temp, subPixWinSize, Size(-1,-1), termcrit);
 
 	int nptsnew = (int) temp.size();
 	if (nptsnew + nTracked >= KLT_MAX_FEATURE_NUM)
@@ -540,6 +716,11 @@ void CVKLTTracker::reset(const ImgG& img, const Mat_f& featPts){
 			points[1][nTracked + k].x = temp[k].pt.x;
 			points[1][nTracked + k].y = temp[k].pt.y;
 			pts2trackId[nTracked + k] = i;
+
+			Mat desc;
+			cv::KeyPoint keyPt(_featPts[2 * i], _featPts[2 * i + 1], 3);
+			mBriefExtractor->compute(gray, keyPt, desc);
+			desc.copyTo(mDesc.row(i));
 			k++;
 		}
 	}

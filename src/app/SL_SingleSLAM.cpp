@@ -35,7 +35,6 @@ SingleSLAM::~SingleSLAM() {
 }
 
 bool SingleSLAM::checkStaticMapPoints(){
-	m_tracker.klt_._flag_falseStatic.fill(1);
 	for (int i = 0; i < m_tracker.m_nMaxCorners; i++){
 		Track2D& tk = m_tracker.m_tks[i];
 		if (tk.empty())
@@ -101,6 +100,11 @@ bool SingleSLAM::checkStaticMapPoint(Track2DNode*node){
 void SingleSLAM::propagateFeatureStates() {
 //	m_tracker.klt_._flag_falseStatic.fill(1);
 
+//	cout << "m_tks[0] " << m_tracker.m_tks[0].length() << endl;
+//	std::vector<Track2DNode*> nodes;
+//	int num = getStaticMappedTrackNodes(nodes);
+//	printf("Num of static pts: %d\n", num);
+
 	for (int i = 0; i < m_tracker.m_nMaxCorners; i++) {
 		Track2D& tk = m_tracker.m_tks[i];
 		if (tk.empty())
@@ -137,18 +141,27 @@ void SingleSLAM::projectTargetToCam(CamPoseItem* cam, double targetPos[3]){
 
 int SingleSLAM::getStaticMappedTrackNodes(std::vector<Track2DNode*>& nodes) {
 	int k = 0;
+
+	int numMpt = 0;
+	int numTkNonEmpty = 0;
+
+	nodes.clear();
 	for (int i = 0; i < m_tracker.m_nMaxCorners; i++) {
 		Track2D& tk = m_tracker.m_tks[i];
 		if (tk.empty())
 			continue;
+		numTkNonEmpty++;
+
 		Track2DNode* node = tk.tail;
 		if (node->pt->mpt) {
+			numMpt++;
 			if (node->pt->mpt->isCertainStatic()) {
 				nodes.push_back(node);
 				k++;
 			}
 		}
 	}
+	printf("num mpt: %d num non empty: %d\n", numMpt, numTkNonEmpty);
 	return k;
 }
 int SingleSLAM::getUnMappedTrackNodes(std::vector<Track2DNode*>& nodes,

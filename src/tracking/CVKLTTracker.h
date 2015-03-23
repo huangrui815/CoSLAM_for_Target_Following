@@ -3,11 +3,15 @@
 #include "CoSL_BaseKLTTracker.h"
 #include "SL_Track2D.h"
 #include "videoReader/VR_AVIReader.h"
-
+#include "opencv2/ocl/ocl.hpp"
+//#include "tracking/BriefExtractor.h"
 typedef float slfloat;
 using namespace std;
-#define KLT_MAX_FEATURE_NUM 1500// 2 cams
+using namespace cv::ocl;
+
+#define KLT_MAX_FEATURE_NUM 1000// 2 cams
 //#define KLT_MAX_FEATURE_NUM 500// 3 cams
+class BriefExtractor;
 
 class CVKLTTracker : public BaseKLTTracker{
 public:
@@ -30,7 +34,6 @@ public:
 	Mat_d _oldFeatPts;
 	Mat_d _featPts, _featPtsBackup;
 	Mat_i _flag, _flagBackup, _flagMapped;
-	Mat_i _flag_falseStatic;
 
 	int _numMappedTracks;
 
@@ -41,10 +44,17 @@ public:
 	bool _bLost;
 	int _recoverFrmNum;
 
+	int mCount;
 	cv::Ptr<cv::FeatureDetector> _goodFeatdetector;
 	cv::Ptr<cv::FeatureDetector> _detector;
 	cv::Ptr<cv::DescriptorExtractor> _extractor;
-	cv::Mat _desc;
+	cv::Mat _desc; // descriptors for initial features
+	BriefExtractor* mBriefExtractor;
+	cv::Mat mDesc;
+
+	PyrLKOpticalFlow d_pyrLK;
+	oclMat _oclPrevGray, _oclCurrGray;
+	oclMat d_prevPts, d_nextPts, d_status;
 
 	class DetectionParam
 	{
@@ -67,9 +77,14 @@ public:
 	};
 
 protected:
-	void _genPointMask(ImgG& mask);
+	void _genPointMask(cv::Mat& mask);
 	void _advanceFrame();
 	int _track(const ImgG& img, int& nTracked);
+	int _track_gpu(const ImgG& img, int& nTracked);
+
+	void download(const oclMat& d_mat, vector<cv::Point2f>& vec);
+	void download(const oclMat& d_mat, vector<uchar>& vec);
+
 public:
 	CVKLTTracker();
 	virtual ~CVKLTTracker();

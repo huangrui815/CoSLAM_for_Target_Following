@@ -123,6 +123,8 @@ src/slam/SL_SolvePnP.h
 )
 
 set(COSLAM_TRACKING
+    src/tracking/BriefExtractor.h
+    src/tracking/BriefExtractor.cpp
 	src/tracking/CoSL_BaseKLTTracker.h
 	src/tracking/SL_Track2D.h
 	src/tracking/SL_Track2D.cpp

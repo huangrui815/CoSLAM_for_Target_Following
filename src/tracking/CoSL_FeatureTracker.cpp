@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "tools/SL_Tictoc.h"
 using namespace cv;
 bool comparator ( const pair<float, int>& l, const pair<float, int>& r)
    { return l.first < r.first; }
@@ -766,6 +767,8 @@ int FeatureTracker::next(const unsigned char* imgData, FeaturePoints& ips) {
 	const int nTrackedFrames = 5;
 
 	int trackRes = 0;
+	TimeMeasurer tm;
+	tm.tic();
 	if (frame_ % nTrackedFrames == 0)
 		//re-detect feature points
 		trackRes = klt_.trackRedetect(img);
@@ -773,6 +776,7 @@ int FeatureTracker::next(const unsigned char* imgData, FeaturePoints& ips) {
 		trackRes = klt_.track(img);
 	if (trackRes < 0)
 		return trackRes;
+	cout << "tracking time: " << tm.toc() << " ms\n";
 
 	klt_.readFeatPoints(pts, flag);
 	updateTracks01(pts, flag, img, ips);
@@ -951,4 +955,6 @@ void FeatureTracker::reset(const ImgG& img,
 			}
 		}
 	}
+
+//	cout << "m_tks[0] " << m_tks[0].length() << endl;
 }

@@ -323,275 +323,275 @@ int NewMapPtsNCC::matchBetween(int cam1, int cam2, Matching& matches) {
 
 	return matches.num;
 }
-#ifdef USE_GPUSURF
-#include <gpusurf/GpuSurfDetector.hpp>
-NewMapPtsSURF::~NewMapPtsSURF() {
-	for (int c = 0; c < numCams; c++) {
-		for (size_t i = 0; i < pFeatPts[c].size(); i++) {
-			FeaturePoint* fp = pFeatPts[c][i];
-			if (!fp->mpt)
-			delete fp;
-		}
-	}
-}
-/**detect SURF feature points in each view*/
-int NewMapPtsSURF::detectSURFPoints() {
-	using namespace std;
-	//1. generate mask
-	Mat_uc mask[SLAM_MAX_NUM];
-	for (int c = 0; c < numCams; c++) {
-		int camId = m_camGroup.camIds[c];
-		mask[camId].resize(pCoSLAM->slam[camId].H, pCoSLAM->slam[camId].W);
-		mask[camId].fill(0);
-	}
-
-//	const int hw = 5;
-//
+//#ifdef USE_GPUSURF
+//#include <gpusurf/GpuSurfDetector.hpp>
+//NewMapPtsSURF::~NewMapPtsSURF() {
+//	for (int c = 0; c < numCams; c++) {
+//		for (size_t i = 0; i < pFeatPts[c].size(); i++) {
+//			FeaturePoint* fp = pFeatPts[c][i];
+//			if (!fp->mpt)
+//			delete fp;
+//		}
+//	}
+//}
+///**detect SURF feature points in each view*/
+//int NewMapPtsSURF::detectSURFPoints() {
+//	using namespace std;
+//	//1. generate mask
+//	Mat_uc mask[SLAM_MAX_NUM];
 //	for (int c = 0; c < numCams; c++) {
 //		int camId = m_camGroup.camIds[c];
-//		vector<FeaturePoint*> mappedFeatPts;
-//		pCoSLAM->slam[camId].getMappedFeatPts(numCams, numCams, mappedFeatPts, 0);
+//		mask[camId].resize(pCoSLAM->slam[camId].H, pCoSLAM->slam[camId].W);
+//		mask[camId].fill(0);
+//	}
+//
+////	const int hw = 5;
+////
+////	for (int c = 0; c < numCams; c++) {
+////		int camId = m_camGroup.camIds[c];
+////		vector<FeaturePoint*> mappedFeatPts;
+////		pCoSLAM->slam[camId].getMappedFeatPts(numCams, numCams, mappedFeatPts, 0);
+////
+////		int W = mask[camId].cols;
+////		int H = mask[camId].rows;
+////		for (size_t i = 0; i < mappedFeatPts.size(); i++) {
+////			FeaturePoint* fp = mappedFeatPts[i];
+////			int x = static_cast<int>(fp->x + 0.5);int
+////			y = static_cast<int>(fp->y + 0.5);
+////
+////			for(int s = -hw; s <= hw; s++) {
+////				for( int t = -hw; t <= hw; t++) {
+////					int x1 = x+t;
+////					int y1 = y+s;
+////					if( x1 < 0 || x1 >= W || y1 < 0 || y1 >= H)
+////					continue;
+////					mask[camId].data[y1*W+x1] = 1;
+////				}
+////			}
+////		}
+////
+////	}
+//
+//	//2. detect the SURF feature points
+//
+//	int npts = 0;
+//	for (int c = 0; c < numCams; c++) {
+//		asrl::GpuSurfConfiguration configuration;
+//		configuration.threshold = hessianThreshold;
+//		asrl::GpuSurfDetector detector(configuration);
+//		m_descDim = detector.descriptorSize();
+//
+//		cv::Mat img(m_img[c].rows, m_img[c].cols, CV_8UC1, m_img[c].data);
+//
+//		detector.buildIntegralImage(img);
+//		detector.detectKeypoints();
+//		detector.findOrientationFast();
+//		detector.computeDescriptors();
+//
+//		vector<cv::KeyPoint> tmpKeyPts;
+//		vector<float> tmpDescs;
+//		detector.getKeypoints(tmpKeyPts);
+//		detector.getDescriptors(tmpDescs);
+//
+//		int camId = m_camGroup.camIds[c];
+//
+//		//remove the masked key points
 //
 //		int W = mask[camId].cols;
 //		int H = mask[camId].rows;
-//		for (size_t i = 0; i < mappedFeatPts.size(); i++) {
-//			FeaturePoint* fp = mappedFeatPts[i];
-//			int x = static_cast<int>(fp->x + 0.5);int
-//			y = static_cast<int>(fp->y + 0.5);
+//		for (size_t i = 0; i < tmpKeyPts.size(); i++) {
+//			cv::KeyPoint kp = tmpKeyPts[i];
+//			int x = static_cast<int>(kp.pt.x + 0.5);
+//			int y = static_cast<int>(kp.pt.y + 0.5);
 //
-//			for(int s = -hw; s <= hw; s++) {
-//				for( int t = -hw; t <= hw; t++) {
-//					int x1 = x+t;
-//					int y1 = y+s;
-//					if( x1 < 0 || x1 >= W || y1 < 0 || y1 >= H)
-//					continue;
-//					mask[camId].data[y1*W+x1] = 1;
+//			if (x >= 0 && x < W && y >= 0 && y < H) {
+//				if (mask[camId][y * W + x] == 0) {
+//					surfPoints[camId].push_back(kp);
+//					for (int j = 0; j < m_descDim; j++)
+//					surfDescs[camId].push_back(tmpDescs[i * m_descDim + j]);
 //				}
 //			}
 //		}
-//
+//		pFeatPts[c].clear();
+//		for (size_t i = 0; i < surfPoints[camId].size(); i++) {
+//			FeaturePoint* fp = new FeaturePoint(pCoSLAM->curFrame, camId, surfPoints[camId][i].pt.x, surfPoints[camId][i].pt.y);
+//			fp->setIntrinsic(pCoSLAM->slam[camId].K);
+//			fp->setCameraPose(pCoSLAM->slam[camId].m_camPos.current());
+//			pFeatPts[c].push_back(fp);
+//		}
+//		//test
+//		logInfo("num surfPts[%d]:%d\n", camId, surfPoints[camId].size());
+//		logInfo("num pFeatPts[%d]:%d\n", c, pFeatPts[c].size());
 //	}
-
-	//2. detect the SURF feature points
-
-	int npts = 0;
-	for (int c = 0; c < numCams; c++) {
-		asrl::GpuSurfConfiguration configuration;
-		configuration.threshold = hessianThreshold;
-		asrl::GpuSurfDetector detector(configuration);
-		m_descDim = detector.descriptorSize();
-
-		cv::Mat img(m_img[c].rows, m_img[c].cols, CV_8UC1, m_img[c].data);
-
-		detector.buildIntegralImage(img);
-		detector.detectKeypoints();
-		detector.findOrientationFast();
-		detector.computeDescriptors();
-
-		vector<cv::KeyPoint> tmpKeyPts;
-		vector<float> tmpDescs;
-		detector.getKeypoints(tmpKeyPts);
-		detector.getDescriptors(tmpDescs);
-
-		int camId = m_camGroup.camIds[c];
-
-		//remove the masked key points
-
-		int W = mask[camId].cols;
-		int H = mask[camId].rows;
-		for (size_t i = 0; i < tmpKeyPts.size(); i++) {
-			cv::KeyPoint kp = tmpKeyPts[i];
-			int x = static_cast<int>(kp.pt.x + 0.5);
-			int y = static_cast<int>(kp.pt.y + 0.5);
-
-			if (x >= 0 && x < W && y >= 0 && y < H) {
-				if (mask[camId][y * W + x] == 0) {
-					surfPoints[camId].push_back(kp);
-					for (int j = 0; j < m_descDim; j++)
-					surfDescs[camId].push_back(tmpDescs[i * m_descDim + j]);
-				}
-			}
-		}
-		pFeatPts[c].clear();
-		for (size_t i = 0; i < surfPoints[camId].size(); i++) {
-			FeaturePoint* fp = new FeaturePoint(pCoSLAM->curFrame, camId, surfPoints[camId][i].pt.x, surfPoints[camId][i].pt.y);
-			fp->setIntrinsic(pCoSLAM->slam[camId].K);
-			fp->setCameraPose(pCoSLAM->slam[camId].m_camPos.current());
-			pFeatPts[c].push_back(fp);
-		}
-		//test
-		logInfo("num surfPts[%d]:%d\n", camId, surfPoints[camId].size());
-		logInfo("num pFeatPts[%d]:%d\n", c, pFeatPts[c].size());
-	}
-	return npts;
-}
-/** match SURF feature points between two views*/
-int NewMapPtsSURF::matchBetween(int iCam, int jCam, Matching& matches) {
-
-	std::vector<float>& desc1 = surfDescs[iCam];
-	std::vector<float>& desc2 = surfDescs[jCam];
-
-	int dim = m_descDim;
-
-	std::vector<cv::DMatch> matches1, matches2;
-
-	cv::Mat matDesc1(desc1.size() / dim, dim, CV_32F, &desc1[0]);
-	cv::Mat matDesc2(desc2.size() / dim, dim, CV_32F, &desc2[0]);
-	cv::BruteForceMatcher<cv::L2<float> > matcher;
-	matcher.match(matDesc1, matDesc2, matches1);
-	matcher.match(matDesc2, matDesc1, matches2);
-
-	//test
-	cv::Mat img1(m_img[iCam].rows, m_img[iCam].cols, CV_8UC1, m_img[iCam].data);
-	cv::Mat img2(m_img[jCam].rows, m_img[jCam].cols, CV_8UC1, m_img[jCam].data);
-
-	cv::Mat outImg;
-	cv::drawMatches(img1, surfPoints[iCam], img2, surfPoints[jCam], matches1, outImg);
-	cv::imwrite("/home/tsou/test.bmp", outImg);
-
-	//cross validation
-	std::vector<int> ind1;
-	ind1.assign(surfPoints[iCam].size(), -1);
-
-	for (size_t j = 0; j < matches1.size(); j++) {
-		int idx1 = matches1[j].queryIdx;
-		int idx2 = matches1[j].trainIdx;
-		ind1[idx1] = idx2;
-	}
-
-	matches.clear();
-	matches.reserve(matches2.size());
-	for (size_t j = 0; j < matches2.size(); j++) {
-		int idx2 = matches2[j].queryIdx;
-		int idx1 = matches2[j].trainIdx;
-		if (ind1[idx1] == idx2) {
-			matches.add(idx1, idx2, matches2[j].distance);
-		}
-	}
-	return matches.num;
-}
-
-void NewMapPtsSURF::setInputs(const CameraGroup& camGroup, CoSLAM* coSLAM, int curFrame) {
-	m_curFrame = curFrame;
-	m_camGroup.copy(camGroup);
-	numCams = 0;
-	for (int i = 0; i < m_camGroup.num; i++) {
-		int iCam = m_camGroup.camIds[i];
-		addSlam(coSLAM->slam[iCam], m_curFrame);
-	}
-	pCoSLAM = coSLAM;
-}
-int NewMapPtsSURF::reconstructTracks(Track2D tracks[], int numTracks, int curFrame, std::vector<MapPoint*>& mapPts, //new map points that are generated
-		int minLen,
-		double maxRpErr) {
-
-	std::vector<FeaturePoint*> reconFeatPts[SLAM_MAX_NUM];
-	int num = 0;
-	for (int k = 0; k < numTracks; k++) {
-		if (tracks[k].length() >= minLen) {
-			Mat_d ms(numCams, 2);
-			Mat_d nms(numCams, 2);
-			Mat_d Ks(numCams, 9);
-			Mat_d Rs(numCams, 9);
-			Mat_d Ts(numCams, 3);
-
-			int npts = 0;
-			for (Track2DNode* pTkNode = tracks[k].head.next; pTkNode; pTkNode = pTkNode->next) {
-				int camId = m_camGroup.camIds[pTkNode->f];
-				ms.data[2 * npts] = pTkNode->x;
-				ms.data[2 * npts + 1] = pTkNode->y;
-
-				//normalize the image coordinates of the feature points
-				normPoint(m_invK[camId], ms.data + 2 * npts, nms.data + 2 * npts);
-
-				memcpy(Ks.data + 9 * npts, m_K[camId], sizeof(double) * 9);
-				memcpy(Rs.data + 9 * npts, m_R[camId], sizeof(double) * 9);
-				memcpy(Ts.data + 3 * npts, m_t[camId], sizeof(double) * 3);
-				npts++;
-			}
-
-			double M[4];
-			triangulateMultiView(npts, Rs.data, Ts.data, nms.data, M);
-			bool outlier = false;
-			//check re-projection error
-			for (int i = 0; i < npts; i++) {
-				double rm[2];
-				project(Ks.data + 9 * i, Rs.data + 9 * i, Ts.data + 3 * i, M, rm);
-				double err = dist2(ms.data + 2 * i, rm);
-				if (err > maxRpErr || isAtCameraBack(Rs.data + 9 * i, Ts.data + 3 * i, M)) {
-					outlier = true;
-					break;
-				}
-			}
-			//if it is a inlier, a new map point is generated
-			if (!outlier) {
-				MapPoint* pM = new MapPoint(M[0], M[1], M[2], curFrame);
-				mapPts.push_back(pM);
-				//get the triangulation covariance
-				getTriangulateCovMat(npts, Ks.data, Rs.data, Ts.data, M, pM->cov, Const::PIXEL_ERR_VAR);
-				for (Track2DNode* pTkNode = tracks[k].head.next; pTkNode; pTkNode = pTkNode->next) {
-					int camId = m_camGroup.camIds[pTkNode->f];
-					FeaturePoint* fp = pTkNode->pt;
-					reconFeatPts[pTkNode->f].push_back(fp);
-					fp->reprojErr = reprojErrorSingle(fp->K, fp->cam->R, fp->cam->t, M, fp->m);
-					pM->addFeature(camId, fp);
-				}
-				pM->setUncertain();
-				num++;
-			}
-		}
-	}
-
-	//test
-	logInfo("%d new map points are generated!\n", num);
-
-	for (int c = 0; c < numCams; c++) {
-		int camId = m_camGroup.camIds[c];
-		pCoSLAM->slam[camId].feedExtraFeatPtsToTracker(reconFeatPts[camId]);
-	}
-	return num;
-
-}
-int NewMapPtsSURF::run() {
-	newMapPts.clear();
-	detectSURFPoints();
-
-	Matching matches[SLAM_MAX_NUM];
-	for (int i = 0; i < numCams - 1; i++) {
-		int camId1 = m_camGroup.camIds[i];
-		int camId2 = m_camGroup.camIds[i + 1];
-		matchBetween(camId1, camId2, matches[i]);
-		//test
-		printf("%d-%d : %d\n", i, i + 1, matches[i].num);
-	}
-
-	Track2D tks[SLAM_MAX_TRACKNUM];
-	int ntks = featTracksFromMatches(numCams, pFeatPts, matches, tks);
-	int npts = reconstructTracks(tks, ntks, m_curFrame, newMapPts, 3, 30.0);
-
-	return npts;
-}
-void NewMapPtsSURF::output() {
-	decidePointType();
-	for (size_t i = 0; i < newMapPts.size(); i++) {
-		MapPoint* mpt = newMapPts[i];
-		for (int j = 0; j < numCams; j++) {
-			int camId = m_camGroup.camIds[j];
-			if (mpt->pFeatures[camId]) {
-				for (FeaturePoint* fp = mpt->pFeatures[camId]; fp->nextFrame; fp = fp->nextFrame) {
-					fp->mpt = mpt;
-					mpt->lastFrame = fp->f > mpt->lastFrame ? fp->f : mpt->lastFrame;
-				}
-				pCoSLAM->slam[camId].m_featPts.add(mpt->pFeatures[camId]);
-			}
-		}
-		if (newMapPts[i]->lastFrame < pCoSLAM->curFrame) {
-			pCoSLAM->actMapPts.add(mpt);
-		} else
-		pCoSLAM->curMapPts.add(mpt);
-	}
-}
-#endif
+//	return npts;
+//}
+///** match SURF feature points between two views*/
+//int NewMapPtsSURF::matchBetween(int iCam, int jCam, Matching& matches) {
+//
+//	std::vector<float>& desc1 = surfDescs[iCam];
+//	std::vector<float>& desc2 = surfDescs[jCam];
+//
+//	int dim = m_descDim;
+//
+//	std::vector<cv::DMatch> matches1, matches2;
+//
+//	cv::Mat matDesc1(desc1.size() / dim, dim, CV_32F, &desc1[0]);
+//	cv::Mat matDesc2(desc2.size() / dim, dim, CV_32F, &desc2[0]);
+//	cv::BruteForceMatcher<cv::L2<float> > matcher;
+//	matcher.match(matDesc1, matDesc2, matches1);
+//	matcher.match(matDesc2, matDesc1, matches2);
+//
+//	//test
+//	cv::Mat img1(m_img[iCam].rows, m_img[iCam].cols, CV_8UC1, m_img[iCam].data);
+//	cv::Mat img2(m_img[jCam].rows, m_img[jCam].cols, CV_8UC1, m_img[jCam].data);
+//
+//	cv::Mat outImg;
+//	cv::drawMatches(img1, surfPoints[iCam], img2, surfPoints[jCam], matches1, outImg);
+//	cv::imwrite("/home/tsou/test.bmp", outImg);
+//
+//	//cross validation
+//	std::vector<int> ind1;
+//	ind1.assign(surfPoints[iCam].size(), -1);
+//
+//	for (size_t j = 0; j < matches1.size(); j++) {
+//		int idx1 = matches1[j].queryIdx;
+//		int idx2 = matches1[j].trainIdx;
+//		ind1[idx1] = idx2;
+//	}
+//
+//	matches.clear();
+//	matches.reserve(matches2.size());
+//	for (size_t j = 0; j < matches2.size(); j++) {
+//		int idx2 = matches2[j].queryIdx;
+//		int idx1 = matches2[j].trainIdx;
+//		if (ind1[idx1] == idx2) {
+//			matches.add(idx1, idx2, matches2[j].distance);
+//		}
+//	}
+//	return matches.num;
+//}
+//
+//void NewMapPtsSURF::setInputs(const CameraGroup& camGroup, CoSLAM* coSLAM, int curFrame) {
+//	m_curFrame = curFrame;
+//	m_camGroup.copy(camGroup);
+//	numCams = 0;
+//	for (int i = 0; i < m_camGroup.num; i++) {
+//		int iCam = m_camGroup.camIds[i];
+//		addSlam(coSLAM->slam[iCam], m_curFrame);
+//	}
+//	pCoSLAM = coSLAM;
+//}
+//int NewMapPtsSURF::reconstructTracks(Track2D tracks[], int numTracks, int curFrame, std::vector<MapPoint*>& mapPts, //new map points that are generated
+//		int minLen,
+//		double maxRpErr) {
+//
+//	std::vector<FeaturePoint*> reconFeatPts[SLAM_MAX_NUM];
+//	int num = 0;
+//	for (int k = 0; k < numTracks; k++) {
+//		if (tracks[k].length() >= minLen) {
+//			Mat_d ms(numCams, 2);
+//			Mat_d nms(numCams, 2);
+//			Mat_d Ks(numCams, 9);
+//			Mat_d Rs(numCams, 9);
+//			Mat_d Ts(numCams, 3);
+//
+//			int npts = 0;
+//			for (Track2DNode* pTkNode = tracks[k].head.next; pTkNode; pTkNode = pTkNode->next) {
+//				int camId = m_camGroup.camIds[pTkNode->f];
+//				ms.data[2 * npts] = pTkNode->x;
+//				ms.data[2 * npts + 1] = pTkNode->y;
+//
+//				//normalize the image coordinates of the feature points
+//				normPoint(m_invK[camId], ms.data + 2 * npts, nms.data + 2 * npts);
+//
+//				memcpy(Ks.data + 9 * npts, m_K[camId], sizeof(double) * 9);
+//				memcpy(Rs.data + 9 * npts, m_R[camId], sizeof(double) * 9);
+//				memcpy(Ts.data + 3 * npts, m_t[camId], sizeof(double) * 3);
+//				npts++;
+//			}
+//
+//			double M[4];
+//			triangulateMultiView(npts, Rs.data, Ts.data, nms.data, M);
+//			bool outlier = false;
+//			//check re-projection error
+//			for (int i = 0; i < npts; i++) {
+//				double rm[2];
+//				project(Ks.data + 9 * i, Rs.data + 9 * i, Ts.data + 3 * i, M, rm);
+//				double err = dist2(ms.data + 2 * i, rm);
+//				if (err > maxRpErr || isAtCameraBack(Rs.data + 9 * i, Ts.data + 3 * i, M)) {
+//					outlier = true;
+//					break;
+//				}
+//			}
+//			//if it is a inlier, a new map point is generated
+//			if (!outlier) {
+//				MapPoint* pM = new MapPoint(M[0], M[1], M[2], curFrame);
+//				mapPts.push_back(pM);
+//				//get the triangulation covariance
+//				getTriangulateCovMat(npts, Ks.data, Rs.data, Ts.data, M, pM->cov, Const::PIXEL_ERR_VAR);
+//				for (Track2DNode* pTkNode = tracks[k].head.next; pTkNode; pTkNode = pTkNode->next) {
+//					int camId = m_camGroup.camIds[pTkNode->f];
+//					FeaturePoint* fp = pTkNode->pt;
+//					reconFeatPts[pTkNode->f].push_back(fp);
+//					fp->reprojErr = reprojErrorSingle(fp->K, fp->cam->R, fp->cam->t, M, fp->m);
+//					pM->addFeature(camId, fp);
+//				}
+//				pM->setUncertain();
+//				num++;
+//			}
+//		}
+//	}
+//
+//	//test
+//	logInfo("%d new map points are generated!\n", num);
+//
+//	for (int c = 0; c < numCams; c++) {
+//		int camId = m_camGroup.camIds[c];
+//		pCoSLAM->slam[camId].feedExtraFeatPtsToTracker(reconFeatPts[camId]);
+//	}
+//	return num;
+//
+//}
+//int NewMapPtsSURF::run() {
+//	newMapPts.clear();
+//	detectSURFPoints();
+//
+//	Matching matches[SLAM_MAX_NUM];
+//	for (int i = 0; i < numCams - 1; i++) {
+//		int camId1 = m_camGroup.camIds[i];
+//		int camId2 = m_camGroup.camIds[i + 1];
+//		matchBetween(camId1, camId2, matches[i]);
+//		//test
+//		printf("%d-%d : %d\n", i, i + 1, matches[i].num);
+//	}
+//
+//	Track2D tks[SLAM_MAX_TRACKNUM];
+//	int ntks = featTracksFromMatches(numCams, pFeatPts, matches, tks);
+//	int npts = reconstructTracks(tks, ntks, m_curFrame, newMapPts, 3, 30.0);
+//
+//	return npts;
+//}
+//void NewMapPtsSURF::output() {
+//	decidePointType();
+//	for (size_t i = 0; i < newMapPts.size(); i++) {
+//		MapPoint* mpt = newMapPts[i];
+//		for (int j = 0; j < numCams; j++) {
+//			int camId = m_camGroup.camIds[j];
+//			if (mpt->pFeatures[camId]) {
+//				for (FeaturePoint* fp = mpt->pFeatures[camId]; fp->nextFrame; fp = fp->nextFrame) {
+//					fp->mpt = mpt;
+//					mpt->lastFrame = fp->f > mpt->lastFrame ? fp->f : mpt->lastFrame;
+//				}
+//				pCoSLAM->slam[camId].m_featPts.add(mpt->pFeatures[camId]);
+//			}
+//		}
+//		if (newMapPts[i]->lastFrame < pCoSLAM->curFrame) {
+//			pCoSLAM->actMapPts.add(mpt);
+//		} else
+//		pCoSLAM->curMapPts.add(mpt);
+//	}
+//}
+//#endif
 void getValidRowsCols(const Mat_d& distMat, double invalidVal, Mat_c& rowFlag,
 		Mat_c& colFlag) {
 	int m = distMat.rows;
