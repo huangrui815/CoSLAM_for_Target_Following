@@ -34,16 +34,18 @@
 
 <h3>
 <a id="designer-templates" class="anchor" href="#designer-templates" aria-hidden="true"><span class="octicon octicon-link"></span></a>Publication</h3>
-<p>Please cite the following publications if you find our work useful.
-
-<p><b>Jacob Perron*, Rui Huang*</b>, Jack Thomas, Lingkang Zhang, Ping Tan, Richard Vaughan, <b>Orbiting a Moving Target with Multi-Robot Collaborative Visual SLAM</b>, Workshop on Multi-View Geometry in Robotics (MVIGRO) at the 2015 Robotics: Science and System Conference (RSS'15 workshop), Rome, Italy, 2015. <a href="https://drive.google.com/open?id=0B_0yL6uDPBqSZjJTUXEwLWVHVGs">PDF</a> (* are first authors of equal contribution)</p>
-
-<p>Danping Zou, and Ping Tan, <b>CoSLAM: Collaborative visual SLAM in dynamic environments</b> Pattern Analysis and Machine Intelligence, IEEE Transactions on 35.2 (2013): 354-366.
+<p><sup>1</sup><b>Jacob Perron*, Rui Huang*</b>, Jack Thomas, Lingkang Zhang, Ping Tan, Richard Vaughan, <b>Orbiting a Moving Target with Multi-Robot Collaborative Visual SLAM</b>, Workshop on Multi-View Geometry in Robotics (MVIGRO) at the 2015 Robotics: Science and System Conference (RSS'15 workshop), Rome, Italy, 2015. <a href="https://drive.google.com/open?id=0B_0yL6uDPBqSZjJTUXEwLWVHVGs">PDF</a> (* are first authors of equal contribution)</p>
 
 <h3>
 <a id="authors-and-contributors" class="anchor" href="#authors-and-contributors" aria-hidden="true"><span class="octicon octicon-link"></span></a>Code and How to use</h3>
 <p>1. CoSLAM for Target Following: The code is available <a href="https://github.com/huangrui815/CoSLAM">here</a>. 
-<p>The improved Collaborative visual SLAM system is designed for dynamic target following using multiple ground robots with off-the-shelf color cameras. It is based on the previous work by D.Zou and P.Tan (<a href="http://www.cs.sfu.ca/~pingtan/Projects/SLAM/index.htm">Project Page</a>). You may refer to <a href="https://github.com/danping/CoSLAM">the github page of the original CoSLAM</a> for some instructions on code installation. A detailed instruction for the new system is under development.
+<p>The improved Collaborative visual SLAM system is designed for dynamic target following using multiple ground robots with off-the-shelf color cameras. It is based on the original CoSLAM system<sup>2</sup> by D.Zou and P.Tan (<a href="http://www.cs.sfu.ca/~pingtan/Projects/SLAM/index.htm">Project Page</a>). The new system is integrated with <a href="www.ros.org">ROS</a> and <a href="http://store.irobot.com/education-research-robots/shop.jsp?categoryId=3311368">iRobot Create</a>. A improved robust feature tracker is implemented for efficient feature tracking. We also adopt a simple yet effective approach for target position estimation from sparse 3D point cloud. For the technical details, please refer to our paper<sup>1</sup>.
+
+<p>You may refer to <a href="https://github.com/danping/CoSLAM">the github page of the original CoSLAM</a> for some instructions on code installation. A detailed instruction for the new system is under development.
+
+<p>Please cite the publication<sup>1</sup> and <sup>2</sup> if you find our work useful.
+
+<p><sup>2</sup>Danping Zou, and Ping Tan, <b>CoSLAM: Collaborative visual SLAM in dynamic environments</b> Pattern Analysis and Machine Intelligence, IEEE Transactions on 35.2 (2013): 354-366.
 
 <p>2. Robot controller: The code is available <a href="https://github.com/jacobperron/orbittarget-CoSLAM">here</a>
 <p>The robot controller recevies the estimated poses of the target and followers from the improved CoSLAM system. The robot team can follow the target by orbiting it using the controller. 
