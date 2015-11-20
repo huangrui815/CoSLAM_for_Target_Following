@@ -943,25 +943,33 @@ bool SingleSLAM::poseUpdate3D_new(const double* R0, const double* t0,
 			nodes[i]->pt->mpt->setUncertain();
 		}
 
+		// To check if the type of the point is uncertain based on the previous feature correspondences
 		if (nodes[i]->pre){
+			//Start from the previous frame
 			Track2DNode* currNode = nodes[i]->pre;
 			CamPoseItem* currCam = 0;
 			int iterNum = 0;
+			// If the corresponding map point exists at that frame
 			while (currNode->f > mpt->firstFrame){
+				//If we have checked 5 times, break;
 				if (iterNum == 5)
 					break;
 
+				//Get the cam pose
 				currCam = currNode->pt->cam;
 				project(K.data,currCam->R, currCam->t, pM, rm);
 				double repErr = dist2(rm, currNode->pt->m);
+
+				// If the reprojection error is larger than 3, set it to be an outlier and uncertain point.
 				if (repErr > 3){
 					numOut++;
 					nodes[i]->pt->reprojErr = repErr;
 					nodes[i]->pt->mpt->setUncertain();
 					break;
 				}
+				// Skip to previous 5 frames
 				bool flag = false;
-				for (int k = 0; k <10; k++){
+				for (int k = 0; k < 5; k++){
 					currNode = currNode->pre;
 					if (!currNode){
 						flag = true;

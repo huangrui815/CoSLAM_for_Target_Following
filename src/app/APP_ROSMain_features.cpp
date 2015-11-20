@@ -173,8 +173,17 @@ bool ROSMain_features() {
 				coSLAM.featureReceiving();
 				coSLAM.virtualReadFrame();
 			}
+			for (int i = 0; i < coSLAM.numCams; i++){
+			cv::Mat cvImg(coSLAM.slam[i].m_img.rows, coSLAM.slam[i].m_img.cols, CV_8UC1,
+								coSLAM.slam[i].m_img.data);
+			MyApp::s_camFrames[i].push_back(cvImg.clone());
+			CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
+			double ts = cam->ts;
+			MyApp::s_camFramesTS[i].push_back(ts);
+			}
 
-			coSLAM.poseUpdate(bEstPose);
+			if(!coSLAM.poseUpdate(bEstPose))
+				break;
 			//Use redis to send over the poses
 
 
@@ -243,6 +252,7 @@ bool ROSMain_features() {
 			for (int i = 0; i < coSLAM.numCams; i++)
 			{
 				if (coSLAM.slam[i].m_camPos.size() > 0){
+
 					double org[3], rpy[3];
 					CamPoseItem* cam = coSLAM.slam[i].m_camPos.current();
 					double ts = cam->ts;
@@ -260,14 +270,16 @@ bool ROSMain_features() {
 //							double H = targetPos[2] * 2;
 //							double Z = coSLAM.slam[i]._targetPosInCam[2];
 						MyApp::redis[i]->setPoseTarget(ts, 1, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.9);
-						MyApp::redis_dynObj->setDynObj(targetPos[0], targetPos[1], 0.9);
+//						MyApp::redis_dynObj->setDynObj(ts, targetPos[0], targetPos[1], 0.9);
 //						printf("currDynPos: %lf %lf %lf\n", cam->currDynPos[0], cam->currDynPos[1], cam->currDynPos[2]);
 					}
 					else
 						MyApp::redis[i]->setPoseTarget(ts, 0, theta, org[0], org[1], rpy[2], targetPos[0], targetPos[1], 0.9);
 
-//					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
-//					printf("org[2]: %lf %lf %lf\n", org[0], org[1], rpy[2]);
+					MyApp::redis_dynObj->setDynObj(ts, 0.5, 2, 0.9);
+
+					printf("targetPos: %lf %lf %lf\n", targetPos[0], targetPos[1], targetPos[2]);
+					printf("org[2]: %lf %lf %lf\n", org[0], org[1], rpy[2]);
 				}
 			}
 		}

@@ -41,10 +41,10 @@ bool CBRedisClient::setPoseTarget(double ts, int present, double theta, double r
 	  return res;
 }
 
-bool CBRedisClient::setDynObj(double x, double y, double z){
+bool CBRedisClient::setDynObj(double ts, double x, double y, double z){
   bool res;
-  redisReply* reply = (redisReply*) redisCommand(mRedis, "SET %s %f:%f:%f",
-		  mName.c_str(), x,y,z);
+  redisReply* reply = (redisReply*) redisCommand(mRedis, "SET %s %f:%f:%f:%f",
+		  mName.c_str(), ts,x,y,z);
   if (reply && strcmp(reply->str, "OK") == 0)
 	res = true; // success
   else

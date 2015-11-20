@@ -177,8 +177,8 @@ public:
 	void featureReceiving();
 
 	/*pose estimation*/
-	void poseUpdate(bool *bEstPose);
-	void parallelPoseUpdate(bool* bEstPose, bool largeErr);
+	bool poseUpdate(bool *bEstPose);
+	bool parallelPoseUpdate(bool* bEstPose, bool largeErr);
 	bool interCamPoseUpdate();
 
 	/*key frame selection*/

@@ -222,6 +222,8 @@ public:
 	static vector<vector<float> > s_reprojErrStatic;
 	static vector<vector<float> > s_reprojErrDynamic;
 	static vector<vector<int> > s_frameNumber;
+	static list<cv::Mat> s_camFrames[SLAM_MAX_NUM];
+	static list<double> s_camFramesTS[SLAM_MAX_NUM];
 };
 
 void getCurTimeString(char* timeStr);

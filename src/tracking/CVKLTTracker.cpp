@@ -374,7 +374,7 @@ int CVKLTTracker::_track_gpu(const ImgG& img, int& nTracked) {
 	vector<bool> descCompare;
 	mBriefExtractor->computeIntegralImg(gray);
 	for (int i = 0; i < points[1].size(); i++){
-		if (status[i]){
+		if (status[i] && replaceDesc){
 			int trackId = pts2trackId[i];
 			cv::KeyPoint kpt(points[1][i].x, points[1][i].y ,3);
 			Mat desc;
@@ -390,8 +390,10 @@ int CVKLTTracker::_track_gpu(const ImgG& img, int& nTracked) {
 			else
 				descCompare.push_back(false);
 		}
-		else
+		else if (!status[i] && replaceDesc)
 			descCompare.push_back(false);
+		else if (!replaceDesc)
+			descCompare.push_back(true);
 	}
 
 	// Update tracking results

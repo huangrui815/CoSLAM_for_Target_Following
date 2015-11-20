@@ -43,6 +43,7 @@ public:
 
 	bool mDynObjPresent;
 	double mDynObjPos[3];
+	vector<double> mDynObjPosVec;
 
 	/* slam data*/
 	const CoSLAM* m_pSLAM;

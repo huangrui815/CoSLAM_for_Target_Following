@@ -321,6 +321,7 @@ void GLImagePane::drawFeaturePoints() {
 	averageDyn[0] = 0;
 	averageDyn[1] = 0;
 
+	Sleep(1);
 	for (size_t k = 0; k < m_pFeatPts.size(); k++) {
 		FeaturePoint* p = m_pFeatPts[k];
 		float x0 = static_cast<float>(p->xo);
@@ -329,10 +330,10 @@ void GLImagePane::drawFeaturePoints() {
 		//convert to image coordinate
 		convert2ImageCoords(x0, y0, x, y);
 		//draw projections without corresponding map points
-		if (p->type != TYPE_FEATPOINT_DYNAMIC) {
-			glColor3f(COLOR_CORNER[0], COLOR_CORNER[1], COLOR_CORNER[2]);
-			drawCircle(x, y, radius, 5);
-		}
+//		if (p->type != TYPE_FEATPOINT_DYNAMIC) {
+//			glColor3f(COLOR_CORNER[0], COLOR_CORNER[1], COLOR_CORNER[2]);
+//			drawCircle(x, y, radius, 5);
+//		}
 //		else {
 //			glColor3f(1.0f, 1.0f, 0.0f);
 //			drawCircle(x, y, radius, 10);
@@ -351,7 +352,7 @@ void GLImagePane::drawFeaturePoints() {
 				averageDyn[1] += y;
 			}
 			else if (p->mpt->isUncertain())
-				glColor3f(1.0f, 0.0f, 0.0f);
+				continue;//glColor3f(1.0f, 0.0f, 0.0f);
 			//			} else if (p->mpt->flag == FLAG_MAPPOINT_TEST4) {
 			//				glColor3f(0.0f, 1.0f, 1.0f);
 			//				glLineWidth(2);
@@ -381,7 +382,7 @@ void GLImagePane::drawFeaturePoints() {
 			else
 				glLineWidth(2.0f);
 
-			drawCircle(x, y, p->mpt->numVisCam * 1.5 * radius, 10);
+				drawCircle(x, y, p->mpt->numVisCam * 1.5 * radius, 10);
 
 			if (p->mInterMatchFound){
 				glColor3f(1.0f, 0.0f, 0.5f);
@@ -390,6 +391,7 @@ void GLImagePane::drawFeaturePoints() {
 
 			//drawCircle(x, y, radius, 10);
 
+			b_drawReprojectionError = false;
 			if (b_drawReprojectionError) {
 				//draw reprojection error
 
@@ -426,19 +428,22 @@ void GLImagePane::drawFeaturePoints() {
 
 	averageDyn[0] = averageDyn[0] / numOfDynamicPts;
 	averageDyn[1] = averageDyn[1] / numOfDynamicPts;
-	glLineWidth(5.0f);
-	glColor3f(0.0f, 1.0f, 0.0f);
-	drawCircle(averageDyn[0], averageDyn[1], 30, 10);
+	if (mDynObjPresent){
+		glLineWidth(5.0f);
+		glColor3f(0.0f, 1.0f, 0.0f);
+	//	drawCircle(averageDyn[0], averageDyn[1], 30, 10);
+		drawCircle(mDynObjImgPos[0], mDynObjImgPos[1], 30, 10);
+	}
 
-	if (numOfStaticPts > 0)
-		MyApp::s_reprojErrStatic[m_camId].push_back(totalReprojErrStatic / numOfStaticPts);
-	else
-		MyApp::s_reprojErrStatic[m_camId].push_back(0);
-
-	if (numOfDynamicPts > 0)
-		MyApp::s_reprojErrDynamic[m_camId].push_back(totalreprojErrDynamic / numOfDynamicPts);
-	else
-		MyApp::s_reprojErrDynamic[m_camId].push_back(0);
+//	if (numOfStaticPts > 0)
+//		MyApp::s_reprojErrStatic[m_camId].push_back(totalReprojErrStatic / numOfStaticPts);
+//	else
+//		MyApp::s_reprojErrStatic[m_camId].push_back(0);
+//
+//	if (numOfDynamicPts > 0)
+//		MyApp::s_reprojErrDynamic[m_camId].push_back(totalreprojErrDynamic / numOfDynamicPts);
+//	else
+//		MyApp::s_reprojErrDynamic[m_camId].push_back(0);
 
 	MyApp::s_frameNumber[m_camId].push_back(m_pSLAM->curFrame);
 }
@@ -569,6 +574,11 @@ void GLImagePane::copyDisplayData() {
 
 	memcpy(m_overlapCost, m_pSLAM->viewOverlapCost,
 			sizeof(double) * SLAM_MAX_NUM * SLAM_MAX_NUM);
+
+	mDynObjPresent = m_pSLAM->dynObjPresent;
+	memcpy(mDynObjPos, m_pSLAM->dynObjPos, 3 * sizeof(double));
+	if (mDynObjPresent)
+		project(m_pSLAM->slam[m_camId].K.data, m_pCamPos->R, m_pCamPos->t, mDynObjPos, mDynObjImgPos);
 
 	pthread_mutex_unlock(&MyApp::s_mutexBA);
 }

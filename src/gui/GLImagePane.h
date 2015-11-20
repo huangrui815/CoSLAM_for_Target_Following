@@ -36,6 +36,10 @@ class GLImagePane: public wxGLCanvas {
 	static int s_clicked_camid;
 	static FeaturePoint* s_clicked_featPt;
 	static MapPoint* s_clicked_mappt;
+
+	bool mDynObjPresent;
+	double mDynObjPos[3];
+	double mDynObjImgPos[2];
 public:
 	GLImagePane(wxFrame* parent, int* args);
 	virtual ~GLImagePane();

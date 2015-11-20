@@ -75,6 +75,11 @@ void GLScenePane::copyDispData() {
 
 	mDynObjPresent = m_pSLAM->dynObjPresent;
 	memcpy(mDynObjPos, m_pSLAM->dynObjPos, 3 * sizeof(double));
+	if (mDynObjPresent){
+		mDynObjPosVec.push_back(mDynObjPos[0]);
+		mDynObjPosVec.push_back(mDynObjPos[1]);
+		mDynObjPosVec.push_back(mDynObjPos[2]);
+	}
 	pthread_mutex_unlock(&MyApp::s_mutexBA);
 
 	if (m_autoScale)
@@ -123,20 +128,20 @@ void GLScenePane::drawPoints() {
 		const MapPoint* p = curMapPoints[i];
 		drawCurMapPoint(p, m_scale, m_pointSize, true); //!MyApp::bStop);
 	}
-	glPointSize(3.0 * m_pointSize);
+	glPointSize(8.0 * m_pointSize);
 	//draw active map points
-	glBegin(GL_POINTS);
-	for (size_t i = 0; i < actMapPoints.size(); i++) {
-		const MapPoint* p = actMapPoints[i];
-		if (p->isCertainStatic()) {
-			double r = p->color[0] / 255.0;
-			double g = p->color[1] / 255.0;
-			double b = p->color[2] / 255.0;
-			glColor3d(r, g, b);
-			glVertex3d(p->x, p->y, p->z);
-		}
-	}
-	glEnd();
+//	glBegin(GL_POINTS);
+//	for (size_t i = 0; i < actMapPoints.size(); i++) {
+//		const MapPoint* p = actMapPoints[i];
+//		if (p->isCertainStatic()) {
+//			double r = p->color[0] / 255.0;
+//			double g = p->color[1] / 255.0;
+//			double b = p->color[2] / 255.0;
+//			glColor3d(0, 1, 0);
+//			glVertex3d(p->x, p->y, p->z);
+//		}
+//	}
+//	glEnd();
 	glPointSize(2.0 * m_pointSize);
 	//	//draw inactive map points
 	//	for (size_t i = 0; i < iactMapPoints.size(); i++) {
@@ -156,19 +161,19 @@ void GLScenePane::drawPoints() {
 	//glDisable(GL_LIGHTING);
 
 	//draw inactive map points
-	glBegin(GL_POINTS);
-	for (size_t i = 0; i < iactMapPoints.size(); i++) {
-		const MapPoint* p = iactMapPoints[i];
-		if (p->isGlobalStatic()) {
-			double r = p->color[0] / 255.0;
-			double g = p->color[1] / 255.0;
-			double b = p->color[2] / 255.0;
-			glColor3d(r, g, b);
-
-			glVertex3d(p->x, p->y, p->z);
-		}
-	}
-	glEnd();
+//	glBegin(GL_POINTS);
+//	for (size_t i = 0; i < iactMapPoints.size(); i++) {
+//		const MapPoint* p = iactMapPoints[i];
+//		if (p->isGlobalStatic()) {
+//			double r = p->color[0] / 255.0;
+//			double g = p->color[1] / 255.0;
+//			double b = p->color[2] / 255.0;
+//			glColor3d(r, g, b);
+//
+//			glVertex3d(p->x, p->y, p->z);
+//		}
+//	}
+//	glEnd();
 
 	if (mDynObjPresent){
 		glPointSize(30.0 * m_pointSize);
@@ -176,6 +181,17 @@ void GLScenePane::drawPoints() {
 		glColor3d(1.0, 0, 0);
 		glVertex3d(mDynObjPos[0], mDynObjPos[1], mDynObjPos[2]);
 		glEnd();
+
+//		glLineWidth(60);
+//		glBegin(GL_LINE_STRIP);
+//		glPointSize(10.0 * m_pointSize);
+//		glBegin(GL_POINTS);
+//		double alpha = 1.0 / mDynObjPosVec.size();
+//		for (size_t i = 0; i < mDynObjPosVec.size(); i = i + 3) {
+//			glColor3d(1, 0, 0);
+//			glVertex3d(mDynObjPosVec[i],mDynObjPosVec[i+1],mDynObjPosVec[i+2]);
+//		}
+//		glEnd();
 	}
 
 	//draw dynamic trajectories
@@ -231,18 +247,18 @@ void GLScenePane::drawPoints() {
 //			}
 //		}
 
-		for (size_t n = 0; n < dynTracks.size(); n++) {
-			glLineWidth(0.5);
-			glBegin(GL_LINE_STRIP);
-
-			double alpha = 1.0 / dynTracks[n].size();
-			for (size_t i = 0; i < dynTracks[n].size(); i++) {
-				glColor4d(0, 0, 1, 1.0 - i * alpha);
-				glVertex3d(dynTracks[n][i].x, dynTracks[n][i].y,
-						dynTracks[n][i].z);
-			}
-			glEnd();
-		}
+//		for (size_t n = 0; n < dynTracks.size(); n++) {
+//			glLineWidth(0.5);
+//			glBegin(GL_LINE_STRIP);
+//
+//			double alpha = 1.0 / dynTracks[n].size();
+//			for (size_t i = 0; i < dynTracks[n].size(); i++) {
+//				glColor4d(0, 0, 1, 1.0 - i * alpha);
+//				glVertex3d(dynTracks[n][i].x, dynTracks[n][i].y,
+//						dynTracks[n][i].z);
+//			}
+//			glEnd();
+//		}
 //
 //		if (maxId > -1){
 ////			for (size_t ii = 0; ii < idLike[maxId].size(); ii++) {

@@ -421,7 +421,7 @@ bool CoSLAM::calibGlobal2Cam(){
 	}
 
 
-//	FILE* fid = fopen("debug_calibGlobal2Cam.txt", "w");
+	FILE* fid = fopen("debug_calibGlobal2Cam.txt", "w");
 
 	for (int i = 0; i < numMarkers; i++){
 		// for each marker
@@ -444,50 +444,50 @@ bool CoSLAM::calibGlobal2Cam(){
 			nms[2*j] = poses.pose.position.x / poses.pose.position.z;
 			nms[2*j + 1] = poses.pose.position.y / poses.pose.position.z;
 			CamPoseItem* cam = slam[j].m_camPos.current();
-			printf("cam %d: R: %lf %lf %lf %lf %lf %lf %lf %lf %lf\n", j, cam->R[0], cam->R[1], cam->R[2],
-					cam->R[3], cam->R[4], cam->R[5], cam->R[6], cam->R[7], cam->R[8]);
-			printf("t: %lf %lf %lf\n", cam->t[0], cam->t[1], cam->t[2]);
+//			printf("cam %d: R: %lf %lf %lf %lf %lf %lf %lf %lf %lf\n", j, cam->R[0], cam->R[1], cam->R[2],
+//					cam->R[3], cam->R[4], cam->R[5], cam->R[6], cam->R[7], cam->R[8]);
+//			printf("t: %lf %lf %lf\n", cam->t[0], cam->t[1], cam->t[2]);
 
 			memcpy(Ks.data + 9 * j, slam[j].K.data, sizeof(double) * 9);
 			memcpy(Rs.data + 9 * j, cam->R, sizeof(double) * 9);
 			memcpy(Ts.data + 3 * j, cam->t, sizeof(double) * 3);
 
-			printf("%d ", MyApp::markerList[j].back().markers[id_markers].id);
-			printf("%lf %lf %lf\n", poses.pose.position.x,
-					poses.pose.position.y, poses.pose.position.z);
+//			printf("%d ", MyApp::markerList[j].back().markers[id_markers].id);
+//			printf("%lf %lf %lf\n", poses.pose.position.x,
+//					poses.pose.position.y, poses.pose.position.z);
 		}
 		double M[3];
 		triangulateMultiView(numCams, Rs.data, Ts.data, nms.data, M);
 		marker_poses_cam.push_back(cv::Point3f(M[0], M[1], M[2]));
-		printf("M[3]: %lf %lf %lf\n", M[0], M[1], M[2]);
-		cout << "i: " << i <<endl;
-		cout << "size: " << MyApp::markerList[0].back().markers.size() << endl;
+//		printf("M[3]: %lf %lf %lf\n", M[0], M[1], M[2]);
+//		cout << "i: " << i <<endl;
+//		cout << "size: " << MyApp::markerList[0].back().markers.size() << endl;
 
 		int id = MyApp::markerList[0].back().markers[i].id;
-		cout << "id: " << id <<endl;
+//		cout << "id: " << id <<endl;
 
 		marker_poses_global.push_back(MyApp::markerPoseGlobal[id]);
-		printf("G: %lf %lf %lf\n", MyApp::markerPoseGlobal[id].x, MyApp::markerPoseGlobal[id].y,
-				MyApp::markerPoseGlobal[id].z);
+//		printf("G: %lf %lf %lf\n", MyApp::markerPoseGlobal[id].x, MyApp::markerPoseGlobal[id].y,
+//				MyApp::markerPoseGlobal[id].z);
 	}
 
 	scale_global2Cam = calibScale(marker_poses_global, marker_poses_cam);
 	printf("scale_global2Cam: %lf\n", scale_global2Cam);
 	for (int i = 0; i < marker_poses_cam.size(); i++){
-		printf("%lf %lf %lf\n", marker_poses_cam[i].x, marker_poses_cam[i].y, marker_poses_cam[i].z);
+//		printf("%lf %lf %lf\n", marker_poses_cam[i].x, marker_poses_cam[i].y, marker_poses_cam[i].z);
 	}
 	for (int i = 0; i < marker_poses_global.size(); i++){
-		printf("%lf %lf %lf\n", marker_poses_global[i].x, marker_poses_global[i].y, marker_poses_global[i].z);
+//		printf("%lf %lf %lf\n", marker_poses_global[i].x, marker_poses_global[i].y, marker_poses_global[i].z);
 	}
 	rigidTransformEsti(marker_poses_cam, marker_poses_global, R_global2Cam, t_global2Cam);
-//	fprintf(fid, "scale: %lf\n", scale_global2Cam);
-//	fprintf(fid, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
-//			R_global2Cam[0], R_global2Cam[1], R_global2Cam[2],
-//			R_global2Cam[3], R_global2Cam[4], R_global2Cam[5],
-//			R_global2Cam[6], R_global2Cam[7], R_global2Cam[8]);
-//	fprintf(fid, "%lf %lf %lf\n",
-//				t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]);
-//	fclose(fid);
+	fprintf(fid, "scale: %lf\n", scale_global2Cam);
+	fprintf(fid, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
+			R_global2Cam[0], R_global2Cam[1], R_global2Cam[2],
+			R_global2Cam[3], R_global2Cam[4], R_global2Cam[5],
+			R_global2Cam[6], R_global2Cam[7], R_global2Cam[8]);
+	fprintf(fid, "%lf %lf %lf\n",
+				t_global2Cam[0], t_global2Cam[1], t_global2Cam[2]);
+	fclose(fid);
 	tf2::Matrix3x3 rotM_global2Cam(R_global2Cam[0],R_global2Cam[1],R_global2Cam[2],
 								   R_global2Cam[3],R_global2Cam[4],R_global2Cam[5],
 								   R_global2Cam[6],R_global2Cam[7],R_global2Cam[8]);
@@ -750,7 +750,7 @@ bool CoSLAM::interCamPoseUpdate() {
 	//	};
 	return true;
 }
-void CoSLAM::poseUpdate(bool *bEstPose) {
+bool CoSLAM::poseUpdate(bool *bEstPose) {
 	TimeMeasurer tm;
 	//	if (!interCamPoseUpdate()) {
 	//		m_easyToFail = false;
@@ -767,10 +767,14 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 //		interCamPoseUpdate();
 //	else
 
-	if (curFrame >= m_lastFrmGroupMerge && curFrame < m_lastFrmGroupMerge + 60)
-		parallelPoseUpdate(bEstPose, true);
-	else
-		parallelPoseUpdate(bEstPose, false);
+	if (curFrame >= m_lastFrmGroupMerge && curFrame < m_lastFrmGroupMerge + 60){
+		if(!parallelPoseUpdate(bEstPose, true))
+			return false;
+	}
+	else{
+		if(!parallelPoseUpdate(bEstPose, false))
+			return false;
+	}
 	//	leaveBACriticalSection();
 	//	CoSLAM::ptr->pause();
 	//	enterBACriticalSection();
@@ -793,6 +797,7 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 
 	leaveBACriticalSection();
 	m_tmMapClassify = tm.toc();
+	return true;
 }
 
 //void* _parallelPoseUpdate(void* param) {
@@ -803,7 +808,7 @@ void CoSLAM::poseUpdate(bool *bEstPose) {
 //	pSLAM->slam[camId].detectDynamicFeaturePoints(20, 5, 50, Const::MAX_EPI_ERR);
 //	return 0;
 //}
-void CoSLAM::parallelPoseUpdate(bool* bEstPose, bool largeErr) {
+bool CoSLAM::parallelPoseUpdate(bool* bEstPose, bool largeErr) {
 	double R[9], t[3];
 
 	if (numCams == 1) {
@@ -811,20 +816,22 @@ void CoSLAM::parallelPoseUpdate(bool* bEstPose, bool largeErr) {
 				slam[0].m_camPos.current()->t, R, t, largeErr);
 		if (bEstPose[0])
 			slam[0].detectDynamicFeaturePoints(20, 5, 3, Const::MAX_EPI_ERR);
-		return;
+		return true;
 	}
 	for (int i = 0; i < numCams; i++) {
 		if (state[i] == SLAM_STATE_NORMAL){
 			bEstPose[i] = slam[i].poseUpdate3D_new(slam[i].m_camPos.current()->R,
 							slam[i].m_camPos.current()->t, R, t, largeErr);
 			if(!bEstPose[i])
-				startRelocalization(i);
+				//startRelocalization(i);
+				return false;
 		}
 		//printf("bEstPose[%d]: %d\n", i, bEstPose[i]);
 		if(bEstPose[i])
 			slam[i].detectDynamicFeaturePoints(20, 5, 3,
 					largeErr ? Const::MAX_EPI_ERR * 5 : Const::MAX_EPI_ERR);
 	}
+	return true;
 //	pthread_t threads[SLAM_MAX_NUM];
 //	for (int i = 1; i < numCams; i++) {
 //		pthread_create(&threads[i], 0, _parallelPoseUpdate, (void*) i);
@@ -3245,7 +3252,7 @@ void CoSLAM::storeDynamicPoints() {
 void CoSLAM::exportResultsVer1(const char timeStr[]) const {
 	using namespace std;
 	char dirPath[256];
-	sprintf(dirPath, "/home/rui/workspace/coslam/slam_results/%s", timeStr);
+	sprintf(dirPath, "/media/rui/Data/Chatterbox_Data/slam_results/%s", timeStr);
 #ifdef WIN32
 	mkdir(dirPath);
 #else
@@ -3255,26 +3262,62 @@ void CoSLAM::exportResultsVer1(const char timeStr[]) const {
 	char filePath[256];
 	cv::VideoWriter vw[2];
 	sprintf(filePath, "%s/video0.avi", dirPath);
-	cv::Size S0(MyApp::rosReader[0]._imgs.back().cols, MyApp::rosReader[0]._imgs.back().rows);
+	cv::Size S0(MyApp::s_camFrames[0].back().cols, MyApp::s_camFrames[0].back().rows);
 	vw[0].open(filePath, CV_FOURCC('M','J','P','G'), 25, S0, 0);
 //		if(!vw[0].isOpened())return -1;
 //
-	for (list<cv::Mat>::iterator it = MyApp::rosReader[0]._imgs.begin();
-			it != MyApp::rosReader[0]._imgs.end(); it++){
+
+	for (list<cv::Mat>::iterator it = MyApp::s_camFrames[0].begin();
+			it != MyApp::s_camFrames[0].end(); it++){
 		vw[0] << *it;
 	}
 	vw[0].release();
 
+	sprintf(filePath, "%s/frameTime01.txt", dirPath);
+	FILE* fid0 = fopen(filePath,"w");
+	for (list<double>::iterator it = MyApp::s_camFramesTS[0].begin();
+			it != MyApp::s_camFramesTS[0].end(); it++){
+		fprintf(fid0, "%lf\n", *it);
+	}
+	fclose(fid0);
+
 	sprintf(filePath, "%s/video1.avi", dirPath);
-	cv::Size S(MyApp::rosReader[1]._imgs.back().cols, MyApp::rosReader[1]._imgs.back().rows);
-	vw[1].open(filePath, CV_FOURCC('M','J','P','G'), 25, S, 0);
+	cv::Size S1(MyApp::s_camFrames[1].back().cols, MyApp::s_camFrames[1].back().rows);
+	vw[1].open(filePath, CV_FOURCC('M','J','P','G'), 25, S1, 0);
 //		if(!vw[0].isOpened())return -1;
 //
-	for (list<cv::Mat>::iterator it = MyApp::rosReader[1]._imgs.begin();
-			it != MyApp::rosReader[1]._imgs.end(); it++){
+	for (list<cv::Mat>::iterator it = MyApp::s_camFrames[1].begin();
+			it != MyApp::s_camFrames[1].end(); it++){
 		vw[1] << *it;
 	}
 	vw[1].release();
+
+	sprintf(filePath, "%s/frameTime02.txt", dirPath);
+	FILE* fid1 = fopen(filePath,"w");
+	for (list<double>::iterator it = MyApp::s_camFramesTS[1].begin();
+			it != MyApp::s_camFramesTS[1].end(); it++){
+		fprintf(fid1, "%lf\n", *it);
+	}
+	fclose(fid1);
+
+//	sprintf(filePath, "%s/video2.avi", dirPath);
+//	cv::Size S2(MyApp::s_camFrames[2].back().cols, MyApp::s_camFrames[2].back().rows);
+//	vw[1].open(filePath, CV_FOURCC('M','J','P','G'), 25, S2, 0);
+////		if(!vw[0].isOpened())return -1;
+////
+//	for (list<cv::Mat>::iterator it = MyApp::s_camFrames[2].begin();
+//			it != MyApp::s_camFrames[2].end(); it++){
+//		vw[1] << *it;
+//	}
+//	vw[1].release();
+//
+//	sprintf(filePath, "%s/frameTime03.txt", dirPath);
+//	fid1 = fopen(filePath,"w");
+//	for (list<double>::iterator it = MyApp::s_camFramesTS[2].begin();
+//			it != MyApp::s_camFramesTS[2].end(); it++){
+//		fprintf(fid1, "%lf\n", *it);
+//	}
+//	fclose(fid1);
 
 	sprintf(filePath, "%s/rosTime.txt", dirPath);
 	FILE* fid = fopen(filePath,"w");

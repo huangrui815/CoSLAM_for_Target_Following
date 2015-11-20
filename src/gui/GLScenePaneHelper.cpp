@@ -241,13 +241,13 @@ void drawCurMapPoint(const MapPoint* p, double range, double pointSize,
 	else if (p->isCertainDynamic())
 		glColor3f(0.0f, 0.0f, 1.0f);
 	else if (p->isUncertain())
-		glColor3f(0.8f, 0.8f, 0.0f);
+;//		glColor3f(0.8f, 0.8f, 0.0f);
 	else
 		return;
 
 	//for debug
-	if (p->flag == FLAG_MAPPOINT_TEST4)
-		glColor3f(1.0f, 0.0f, 0.0f);
+//	if (p->flag == FLAG_MAPPOINT_TEST4)
+//		glColor3f(1.0f, 0.0f, 0.0f);
 
 //	glEnable(GL_LIGHTING);
 //	glEnable(GL_LIGHT1);
@@ -263,7 +263,7 @@ void drawCurMapPoint(const MapPoint* p, double range, double pointSize,
 	if (p->isCertainStatic())
 		glPointSize(4.0 * pointSize);
 	else
-		glPointSize(8.0 * pointSize);
+		;//glPointSize(8.0 * pointSize);
 
 	if (p->flag == FLAG_MAPPOINT_TEST4)
 		glPointSize(20.0 * pointSize);
@@ -272,6 +272,7 @@ void drawCurMapPoint(const MapPoint* p, double range, double pointSize,
 	glVertex3d(p->x, p->y, p->z);
 	glEnd();
 
+	drawCov = false;
 	if (drawCov && p->cov[0] > 0) {
 		//skip the dynamic points
 		if (p->isCertainDynamic())

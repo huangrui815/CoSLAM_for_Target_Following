@@ -111,6 +111,12 @@ bool offlineMain() {
 			tmPerStep.tic();
 
 			coSLAM.grabReadFrame();
+			for (int i = 0; i < coSLAM.numCams; i++){
+			cv::Mat cvImg(coSLAM.slam[i].m_img.rows, coSLAM.slam[i].m_img.cols, CV_8UC1,
+								coSLAM.slam[i].m_img.data);
+			MyApp::s_camFrames[i].push_back(cvImg.clone());
+			}
+
 			coSLAM.featureTracking();
 			coSLAM.poseUpdate(bEstPose);
 
@@ -152,7 +158,7 @@ bool offlineMain() {
 
 			coSLAM.m_tmPerStep = tmPerStep.toc();
 			tmStepVec.push_back(coSLAM.m_tmPerStep);
-			Sleep(30);
+			Sleep(3);
 
 			if (i % 500 == 0) {
 				//coSLAM.releaseFeatPts(coSLAM.curFrame - 500);
