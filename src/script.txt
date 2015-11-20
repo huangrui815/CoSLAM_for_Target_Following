@@ -1,0 +1,26 @@
+#mode
+$offline
+online2Cam
+
+#calibration files
+/home/rui/workspace/calibrations/logitech_ball.txt
+/home/rui/workspace/calibrations/logitech_ball.txt
+$/home/rui/workspace/calibrations/logitech_ball.txt
+$/home/rui/workspace/calibrations/logitech_ball_640x480.txt
+$/home/rui/workspace/calibrations/logitech_ball_640x480.txt
+
+#video path
+$/media/rui/Data/Chatterbox_Data/slam_results/15-03-02=22-39/video0.avi
+$/media/rui/Data/Chatterbox_Data/slam_results/15-03-02=22-39/video1.avi
+$/media/rui/Data/Chatterbox_Data/slam_results/15-03-02=21-29/video0.avi
+$/media/rui/Data/Chatterbox_Data/slam_results/15-03-02=21-29/video1.avi
+/media/rui/Data/Chatterbox_Data/slam_results/15-05-15=19-30/video0.avi
+/media/rui/Data/Chatterbox_Data/slam_results/15-05-15=19-30/video1.avi
+
+#skipped frames
+$1500
+$1500
+$3200
+$3200
+600
+600
